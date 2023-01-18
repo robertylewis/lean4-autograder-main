@@ -13,4 +13,4 @@ lean_exe autograder where
   supportInterpreter := true
 
 require mathlib from git
-  "https://github.com/leanprover-community/mathlib4.git" @ "8cc7ae9e6c622a3462dea5a6a7ee03c8976a8d93"
+  "https://github.com/leanprover-community/mathlib4.git" @ "6bec256dfcebfa29b793da445bf3d3ec58ddaadb"
