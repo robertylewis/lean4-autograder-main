@@ -6,11 +6,11 @@ cp config.json autograder_config.json
 
 cp /autograder/submission/* /autograder/source/Assignment.lean
 
-# cd PythonScripts
+cd PythonScripts
 
-# python3 get_template_from_github.py
+python3 get_template_from_github.py
 
-# cd ..
+cd ..
 
 ~/.elan/bin/lake exe cache get 
 
