@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+
+set -ex
+
+cd /autograder/source
+
+cp /autograder/submission/* /autograder/source/Assignment.lean
+
+cd PythonScripts
+
+python3 get_template_from_github.py
+
+cd ..
+
+~/.elan/bin/lake build autograder AutograderTests 
+
+~/.elan/bin/lake exe autograder AutograderTests.Solution Assignment.lean

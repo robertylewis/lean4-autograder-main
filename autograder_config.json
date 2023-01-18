@@ -1,0 +1,5 @@
+{
+    "private_repo": "USER/REPO_NAME",
+    "public_repo": "USER/REPO_NAME",
+    "assignment_path": "EXAMPLE_FOLDER/EXAMPLE_FILE.lean"
+}
