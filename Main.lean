@@ -29,7 +29,8 @@ def usedAxiomsAreValid (submissionAxioms : List Name) : Bool :=
   | x :: xs => if validAxioms.contains x then usedAxiomsAreValid xs else false 
 
 def gradeSubmission (sheetName : Name) (sheet submission : Environment) : IO (Array ExerciseResult) := do
-  let names <- IO.FS.readFile "AutograderTests/exercises.txt"
+  let names <- IO.FS.readFile "lake-packages/autograder/AutograderTests/exercises.txt"
+    -- todo: the lake-packages/autograder path shouldn't be hardcoded here
   
   if names.length == 0 then 
     throw <| IO.userError "There are no exercises annotated with points in the template, thus, the submission can't be graded."
