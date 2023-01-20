@@ -1,16 +1,20 @@
 #!/usr/bin/env bash
 
+# At submision time, this script is located at `~/lake-packages/autograder/run_autograder_main`.
+# The `run_autograder` script is expected to copy it to `~`.
+# It is run in `~`.
+
 set -ex
 
-cp config.json autograder_config.json
+cp config.json lake-packages/autograder/autograder_config.json
 
-cp /autograder/submission/* /autograder/source/Assignment.lean
+cp /autograder/submission/* lake-packages/autograder/Assignment.lean
 
-cd PythonScripts
+cd lake-packages/autograder/PythonScripts
 
 python3 get_template_from_github.py
 
-cd ..
+cd ../../..
 
 ~/.elan/bin/lake exe cache get 
 
