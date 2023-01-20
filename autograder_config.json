@@ -1,5 +1,5 @@
 {
     "private_repo": "USER/REPO_NAME",
-    "public_repo": "USER/REPO_NAME",
-    "assignment_path": "EXAMPLE_FOLDER/EXAMPLE_FILE.lean"
+    "public_repo": "hrmacbeth/autograder_test_instructor",
+    "assignment_path": "ProblemSets/ProblemSet1.lean"
 }
