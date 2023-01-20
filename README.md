@@ -9,6 +9,19 @@ To generate the files Gradescope needs, this project uses a repository on GitHub
 theorem th3 (h : ¬q → ¬p) : (p → q) := sorry
 ```
 
+It is **NOT** necessary to edit `autograder_config.json` unless you want to use the helper scripts.
+
+### Gradescope Container Minimum Specifications
+
+This project is meant to work with MathLib assignments, so for a good Gradescope performance, their container must have at least 2.0 CPU and 3.0GB RAM.
+
+## Usage
+
+Add this project as a lake dependency to your course project. Then, set up the [autograder shell](https://github.com/robertylewis/lean4_autograder) for use with an assignment in that course project.
+
+
+## Old readme, for helper scripts
+
 Additionally, on *autograder_config.json*, please replace the following variables values:
     
 - **private_repo** with the repo path you that contains your files.
@@ -29,6 +42,3 @@ We provide a set of scripts that can help to maintain/create the autograder and 
 
 3. **make_autograder.sh** generates the zip file to be uploaded to Gradescope. 
 
-### Gradescope Container Minimum Specifications
-
-This project is meant to work with MathLib assignments, so for a good Gradescope performance, their container must have at least 2.0 CPU and 3.0GB RAM.
