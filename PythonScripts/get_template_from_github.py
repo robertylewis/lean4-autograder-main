@@ -4,28 +4,43 @@ import os
 
 COMMENT_PATTERN = "^/-.*-/$"
 PROBLEM_PATTERN = "^(theorem|lemma){1}.*"
+NAMESPACE_PATTERN = "^namespace{1}.*"
+END_NAMESPACE_PATTERN = "^end{1}.*"
 
 PROBLEMS = re.compile(PROBLEM_PATTERN)
 COMMENTS = re.compile(COMMENT_PATTERN)
+NAMESPACES = re.compile(NAMESPACE_PATTERN)
+END_NAMESPACES = re.compile(END_NAMESPACE_PATTERN)
 
 TEMPLATE_FILE = "../AutograderTests/Solution.lean"
 EXERCISES_FILE = "../AutograderTests/exercises.txt"
+
+def prefix_ident_with_namespaces(ident, namespaces):
+    return ''.join([n + "." for n in namespaces]) + ident
 
 def extract_exercises_names_and_points_from_template():
     names_and_points = {}
     points = 0
     comment = False
+    namespaces = []
     with open(TEMPLATE_FILE, "r") as file:
         for line in file.readlines():
             line = line.strip()
-            if COMMENTS.match(line):
+            if NAMESPACES.match(line):
+                words = line.split(" ")
+                namespaces.append(words[1])
+            elif END_NAMESPACES.match(line):
+                words = line.split(" ") 
+                if words[1] == namespaces[len(namespaces) - 1]:
+                    namespaces.pop() 
+            elif COMMENTS.match(line):
                 comment = True
                 words = line.split(" ")
                 points = words[1]
             else:
                 if comment and PROBLEMS.match(line): 
                     words = line.split(" ")
-                    names_and_points[words[1]] = int(points)
+                    names_and_points[prefix_ident_with_namespaces(words[1], namespaces)] = int(points)
                 comment = False
     return names_and_points
 
