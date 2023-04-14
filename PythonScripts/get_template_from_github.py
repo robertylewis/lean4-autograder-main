@@ -40,7 +40,11 @@ def extract_exercises_names_and_points_from_template():
             else:
                 if comment and PROBLEMS.match(line): 
                     words = line.split(" ")
-                    names_and_points[prefix_ident_with_namespaces(words[1], namespaces)] = int(points)
+                    try:
+                        pts = int(points)
+                    except ValueError:
+                        pts = 0
+                    names_and_points[prefix_ident_with_namespaces(words[1], namespaces)] = pts
                 comment = False
     return names_and_points
 
