@@ -96,7 +96,7 @@ def main (args : List String) : IO Unit := do
       searchPathRef.modify fun sp => submissionBuildDir :: sp
       IO.println "Modified search path"
       -- importModules [{module := `Submission}] {}
-      importModules sheet.header.imports.toList {}
+      mkEmptyEnvironment
     catch ex =>
       IO.println "Unexpected error encountered; pushing to errors..."
       errors := errors.push ex.toString
