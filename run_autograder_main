@@ -10,12 +10,6 @@ cp config.json lake-packages/autograder/autograder_config.json
 
 cp /autograder/submission/* Assignment.lean
 
-cd lake-packages/autograder/PythonScripts
-
-python3 get_template_from_github.py
-
-cd ../../..
-
 ~/.elan/bin/lake exe cache get 
 
 if ! ~/.elan/bin/lake build autograder AutograderTests ; then 

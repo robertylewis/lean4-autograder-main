@@ -93,3 +93,8 @@ def main (args : List String) : IO Unit := do
   let results : GradingResults := { tests }
   if errors.size == 0 then
     IO.FS.writeFile "../results/results.json" (toJson results).pretty
+  -- For debugging
+  else
+    let result : ExerciseResult := { name := toString submission, status := "failed", output := errors.foldl (λ e acc => e ++ "\n\n" ++ acc) "", score := 0.0 }
+    let results : GradingResults := { tests := #[result] }
+    IO.FS.writeFile "../results/results.json" (toJson results).pretty
