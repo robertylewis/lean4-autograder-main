@@ -70,8 +70,10 @@ def main (args : List String) : IO Unit := do
   let sheet ← importModules [{module := sheetName}] {}
   let submissionBuildDir : FilePath := "build" / "submission"
   FS.createDirAll submissionBuildDir
+  IO.println "Initialized"
   let submissionOlean := submissionBuildDir / "Submission.olean"
   if ← submissionOlean.pathExists then FS.removeFile submissionOlean
+  IO.println "Removed existing olean"
   let mut errors := #[]
   let submissionEnv ←
     try
@@ -80,21 +82,28 @@ def main (args : List String) : IO Unit := do
         args := #[submission.toString, "-o", submissionOlean.toString]
       }
       if out.exitCode != 0 then
+        IO.println s!"Failed with nonzero exit code {out.exitCode}"
         let result : ExerciseResult := { name := toString submission, status := "failed", output := out.stderr , score := 0.0 }
         let results : GradingResults := { tests := #[result] }
         IO.FS.writeFile "../results/results.json" (toJson results).pretty
         throw <| IO.userError s!"Lean exited with code {out.exitCode}:\n{out.stderr}"
+      IO.println "Compilation succeedded"
       searchPathRef.modify fun sp => submissionBuildDir :: sp
       importModules [{module := `Submission}] {}
     catch ex =>
+      IO.println "Unexpected error encountered; pushing to errors..."
       errors := errors.push ex.toString
       importModules sheet.header.imports.toList {}
+  IO.println "Preparing to grade"
   let tests ← gradeSubmission sheetName sheet submissionEnv
+  IO.println s!"Graded with results {tests.map (λ e => e.status)}"
   let results : GradingResults := { tests }
   if errors.size == 0 then
+    IO.println "No errors; writing file"
     IO.FS.writeFile "../results/results.json" (toJson results).pretty
   -- For debugging
   else
+    IO.println "Errors found; entering debug branch"
     let result : ExerciseResult := { name := toString submission, status := "failed", output := errors.foldl (λ e acc => e ++ "\n\n" ++ acc) "", score := 0.0 }
     let results : GradingResults := { tests := #[result] }
     IO.FS.writeFile "../results/results.json" (toJson results).pretty
