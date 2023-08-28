@@ -2,6 +2,21 @@ import Lean
 -- import Mathlib -- ensures Mathlib is compiled when the container is being uploaded
 open Lean IO System Elab Command
 
+-- Attribute for point values
+syntax (name := problem) scientific "points" : attr
+initialize problemAttr : ParametricAttribute Float ←
+  registerParametricAttribute {
+    name := `problem
+    descr := "specify a point value of a problem"
+    -- applicationTime := .afterCompilation
+    getParam := λ _ stx => match stx with
+      | `(attr| $pts:scientific points) => 
+        let (n, s, d) := pts.getScientific
+        return Float.ofScientific n s d
+      | _  => throwError "invalid problem attribute"
+    afterSet := λ _ _ => do pure ()
+  }
+
 structure ExerciseResult where
   score : Float
   name : Name
@@ -26,27 +41,17 @@ def validAxioms : Array Name := #["Classical.choice".toName, "Quot.sound".toName
 def usedAxiomsAreValid (submissionAxioms : List Name) : Bool := 
   match submissionAxioms with 
   | [] => true
-  | x :: xs => if validAxioms.contains x then usedAxiomsAreValid xs else false 
+  | x :: xs => if validAxioms.contains x then usedAxiomsAreValid xs else false
 
 def gradeSubmission (sheetName : Name) (sheet submission : Environment) : IO (Array ExerciseResult) := do
-  let names <- IO.FS.readFile "lake-packages/autograder/AutograderTests/exercises.txt"
-    -- todo: the lake-packages/autograder path shouldn't be hardcoded here
-  
-  if names.length == 0 then 
-    throw <| IO.userError "There are no exercises annotated with points in the template, thus, the submission can't be graded."
-  
-  let mut exercises : HashMap Name Nat := HashMap.empty
-  for item in (names.splitOn "\n") do 
-    let values := (item.splitOn ";")
-    if values.length == 2 then
-      exercises := exercises.insert values[0]!.toName values[1]!.toNat!
-
   let some sheetMod := sheet.moduleDataOf? sheetName
     | throw <| IO.userError s!"module name {sheetName} not found"
   let mut results := #[]
 
   for name in sheetMod.constNames, constInfo in sheetMod.constants do
-    if not name.isInternal && exercises.contains name then
+    -- Only consider annotated, non-internal declarations
+    if let some pts := problemAttr.getParam? sheet name then
+    if not name.isInternal then
       let result ←
         -- exercise to be filled in
         if let some subConstInfo := submission.find? name then
@@ -58,12 +63,16 @@ def gradeSubmission (sheetName : Name) (sheet submission : Environment) : IO (Ar
             else
               let (_, submissionState) := ((CollectAxioms.collect name).run submission).run {}
               if usedAxiomsAreValid submissionState.axioms.toList 
-                then pure { name, status := "passed", score := (exercises.find! name).toFloat , output := "Passed all tests" }
+                then pure { name, status := "passed", score := pts, output := "Passed all tests" }
               else 
                 pure { name, status := "failed", output := "Contains unexpected axioms", score := 0.0 }
         else
           pure { name, status := "failed", output := "Declaration not found in submission", score := 0.0 }
       results := results.push result
+
+  -- TODO: do we actually need this?
+  if results.size == 0 then  
+    throw <| IO.userError "There are no exercises annotated with points in the template; thus, the submission can't be graded."
   return results
 
 def main (args : List String) : IO Unit := do
