@@ -22,6 +22,7 @@ def Lean.Environment.moduleOfDecl? (decl : Name) (env : Environment) : Option Na
   let modIdx : Nat ← env.getModuleIdxFor? decl
   env.header.moduleNames[modIdx]?
 
+-- TODO: why isn't `funext` valid?
 def validAxioms : Array Name := #["Classical.choice".toName, "Quot.sound".toName, "propext".toName] 
 
 def usedAxiomsAreValid (submissionAxioms : List Name) : Bool := 
@@ -77,10 +78,14 @@ def main (args : List String) : IO Unit := do
   let mut errors := #[]
   let submissionEnv ←
     try
+      IO.println "Preparing to compile"
       let out ← IO.Process.output {
         cmd := "lean"
         args := #[submission.toString, "-o", submissionOlean.toString]
       }
+      IO.println "Compilation complete"
+      IO.println s!"Out: {out.stdout}"
+      IO.println s!"Err: {out.stderr}"
       if out.exitCode != 0 then
         IO.println s!"Failed with nonzero exit code {out.exitCode}"
         let result : ExerciseResult := { name := toString submission, status := "failed", output := out.stderr , score := 0.0 }
