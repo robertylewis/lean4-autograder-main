@@ -31,3 +31,5 @@ if ! ~/.elan/bin/lake build autograder AutograderTests ; then
 fi
 
 ~/.elan/bin/lake exe autograder AutograderTests.Solution Assignment.lean
+# TODO: delete when done debugging
+echo $?
