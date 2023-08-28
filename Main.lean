@@ -95,6 +95,10 @@ def main (args : List String) : IO Unit := do
       IO.println "Compilation succeedded"
       searchPathRef.modify fun sp => submissionBuildDir :: sp
       IO.println "Modified search path"
+      try
+        let env ← importModules [{module := `Submission}] {}
+      catch ex =>
+        IO.println "Import Error!"
       -- FIXME: silently crashing on `importModules`
       -- importModules [{module := `Submission}] {}
       importModules [] {}
