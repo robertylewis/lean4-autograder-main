@@ -100,6 +100,7 @@ def main (args : List String) : IO Unit := do
       IO.println "Unexpected error encountered; pushing to errors..."
       errors := errors.push ex.toString
       importModules sheet.header.imports.toList {}
+  IO.FS.writeFile "isPrintlnWorking.txt" "test"
   IO.println "Preparing to grade"
   let tests ← gradeSubmission sheetName sheet submissionEnv
   IO.println s!"Graded with results {tests.map (λ e => e.status)}"
