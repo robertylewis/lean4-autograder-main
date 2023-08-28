@@ -95,8 +95,9 @@ def main (args : List String) : IO Unit := do
       IO.println "Compilation succeedded"
       searchPathRef.modify fun sp => submissionBuildDir :: sp
       IO.println "Modified search path"
+      -- FIXME: silently crashing on `importModules`
       -- importModules [{module := `Submission}] {}
-      mkEmptyEnvironment
+      importModules [] {}
     catch ex =>
       IO.println "Unexpected error encountered; pushing to errors..."
       errors := errors.push ex.toString
