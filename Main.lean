@@ -175,19 +175,28 @@ where
   | []    => pure ()
   | i::is => do
     if i.runtimeOnly || (← get).moduleNameSet.contains i.module then
+      IO.println s!"iM skipping import {i}"
       importMods is
     else do
+      IO.println s!"iM importing {i}"
       modify fun s => { s with moduleNameSet := s.moduleNameSet.insert i.module }
+      IO.println s!"iM modified"
       let mFile ← findOLean i.module
+      IO.println s!"iM found olean"
       unless (← mFile.pathExists) do
+        IO.println s!"iM panic! no path!"
         throw <| IO.userError s!"object file '{mFile}' of module {i.module} does not exist"
+      IO.println s!"iM path exists"
       let (mod, region) ← readModuleData mFile
+      IO.println s!"iM read module data; preparing to recurse"
       importMods mod.imports.toList
+      IO.println s!"iM imported deps"
       modify fun s => { s with
         moduleData  := s.moduleData.push mod
         regions     := s.regions.push region
         moduleNames := s.moduleNames.push i.module
       }
+      IO.println s!"iM last modification complete"
       importMods is
 
 def main (args : List String) : IO Unit := do
