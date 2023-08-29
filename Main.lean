@@ -118,7 +118,9 @@ where
     else
       return env
 
-partial def myImportModules (imports : List Import) (opts : Options) (trustLevel : UInt32 := 0) : IO Environment := profileitIO "import" opts do
+partial def myImportModules (imports : List Import) (opts : Options) (trustLevel : UInt32 := 0) : IO Environment := --profileitIO "import" opts do
+  do
+  IO.println "entered"
   for imp in imports do
     IO.println "start import"
     if imp.module matches .anonymous then
