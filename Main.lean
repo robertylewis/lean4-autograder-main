@@ -120,16 +120,20 @@ where
 
 partial def myImportModules (imports : List Import) (opts : Options) (trustLevel : UInt32 := 0) : IO Environment := profileitIO "import" opts do
   for imp in imports do
+    IO.println "start import"
     if imp.module matches .anonymous then
       throw <| IO.userError "import failed, trying to import module with anonymous name"
   withImporting do
+    IO.println "survive throw"
     let (_, s) ← importMods imports |>.run {}
+    IO.println "import mods success"
     let mut numConsts := 0
     for mod in s.moduleData do
       numConsts := numConsts + mod.constants.size + mod.extraConstNames.size
     let mut modIdx : Nat := 0
     let mut const2ModIdx : HashMap Name ModuleIdx := mkHashMap (capacity := numConsts)
     let mut constantMap : HashMap Name ConstantInfo := mkHashMap (capacity := numConsts)
+    IO.println "pre-other-thing-that-can-throw"
     for mod in s.moduleData do
       for cname in mod.constNames, cinfo in mod.constants do
         match constantMap.insert' cname cinfo with
@@ -141,6 +145,7 @@ partial def myImportModules (imports : List Import) (opts : Options) (trustLevel
       for cname in mod.extraConstNames do
         const2ModIdx := const2ModIdx.insert cname modIdx
       modIdx := modIdx + 1
+    IO.println "post-other-thing-that-can-throw"
     let constants : ConstMap := SMap.fromHashMap constantMap false
     let exts ← mkInitialExtensionStates
     IO.println "make initial states"
