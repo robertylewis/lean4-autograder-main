@@ -12,16 +12,4 @@ cp /autograder/submission/* Assignment.lean
 
 ~/.elan/bin/lake exe cache get 
 
-if ! ~/.elan/bin/lake build autograder AutograderTests ; then 
-  cp lake-packages/autograder/bad_autograder_error.json ../results/results.json 
-  exit 1
-fi
-  
-cp Assignment.lean lake-packages/autograder/AutograderTests/Assignment.lean 
-
-if ! ~/.elan/bin/lake build autograder AutograderTests ; then 
-  cp lake-packages/autograder/fails_to_compile_error.json ../results/results.json 
-  exit 1
-fi
-
 ~/.elan/bin/lake exe autograder AutograderTests.Solution Assignment.lean

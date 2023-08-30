@@ -92,11 +92,35 @@ def getTemplateFromGitHub : Unit → IO Unit := λ _ => do
   else
     throw <| IO.userError s!"Invalid public_repo found in autograder_config.json"
 
+def compileTests : Unit → IO Unit := λ _ => do
+  let resultsPath : FilePath := ".." / "results" / "results.json"
+  let badAgPath := agPathPrefix / "bad_autograder_error.json"
+  let studentErrorPath := agPathPrefix / "fails_to_compile_error.json"
+  -- Check that the template compiles
+  let out ← IO.Process.output {
+    cmd := "~/.elan/bin/lake"
+    args := #["build", "autograder", "AutograderTests"]
+  }
+  if out.exitCode != 0 then
+    IO.FS.writeFile resultsPath (← IO.FS.readFile badAgPath)
+    throw <| IO.userError s!"Autograder tests failed to compile"
+  
+  -- Check that the student submission compiles
+  let studentAsgnPath : FilePath := agPathPrefix / "AutograderTests" / "Assignment.lean"
+  IO.FS.writeFile studentAsgnPath (← IO.FS.readFile "Assignment.lean")
+  let out ← IO.Process.output {
+    cmd := "~/.elan/bin/lake"
+    args := #["build", "autograder", "AutograderTests"]
+  }
+  if out.exitCode != 0 then
+    IO.FS.writeFile resultsPath (← IO.FS.readFile studentErrorPath)
+    throw <| IO.userError s!"Student submission failed to compile"
 
 def main (args : List String) : IO Unit := do
   let usage := throw <| IO.userError s!"Usage: autograder Exercise.Sheet.Module submission-file.lean"
   let [sheetName, submission] := args | usage
   getTemplateFromGitHub ()
+  compileTests ()
   let submission : FilePath := submission
   let some sheetName := Syntax.decodeNameLit ("`" ++ sheetName) | usage
   searchPathRef.set (← addSearchPathFromEnv {})
