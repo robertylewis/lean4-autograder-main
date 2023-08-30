@@ -98,8 +98,8 @@ def compileTests : Unit → IO Unit := λ _ => do
   let studentErrorPath := agPathPrefix / "fails_to_compile_error.json"
   -- Check that the template compiles
   let compileArgs : Process.SpawnArgs := {
-    cmd := "env"
-    args := #["bash", "/root/.elan/bin/lake", "build", "autograder", "AutograderTests"]
+    cmd := "/root/.elan/bin/lake"
+    args := #["build", "autograder", "AutograderTests"]
   }
   let out ← IO.Process.output compileArgs
   IO.println $ "OUT: " ++ out.stdout
