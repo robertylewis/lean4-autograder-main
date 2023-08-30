@@ -62,14 +62,15 @@ def gradeSubmission (sheetName : Name) (sheet submission : Environment) : IO (Ar
     throw <| IO.userError "There are no exercises annotated with points in the template; thus, the submission can't be graded."
   return results
 
+def agPathPrefix : FilePath := "lake-packages" / "autograder"
 -- TODO: now that this is no longer a separate Python script, we could probably
 -- avoid having to pass in the template name as a command-line arg to `main`
 -- (just extract it to a global Lean variable here)
 def getTemplateFromGitHub : Unit → IO Unit := λ _ => do
   -- Read JSON config
-  let configRaw ← IO.FS.readFile "autograder_config.json"
+  let configRaw ← IO.FS.readFile (agPathPrefix / "autograder_config.json")
   let config ← IO.ofExcept $ Json.parse configRaw
-  let templateFile : FilePath := "AutograderTests" / "Solution.lean"
+  let templateFile : FilePath := agPathPrefix / "AutograderTests" / "Solution.lean"
   if ← templateFile.pathExists then FS.removeFile templateFile
   let repoPath ← IO.ofExcept $ config.getObjValAs? String "public_repo"
   
@@ -77,14 +78,14 @@ def getTemplateFromGitHub : Unit → IO Unit := λ _ => do
     -- Download the repo
     let out ← IO.Process.output {
       cmd := "git"
-      args := #["clone", s!"https://github.com/{repoPath}"]
+      args := #["clone", s!"https://github.com/{repoPath}", (agPathPrefix / repoName).toString]
     }
     if out.exitCode != 0 then
       throw <| IO.userError s!"Failed to download public repo from GitHub"
     
     -- Move the assignment to the correct location; delete the rest
     let assignmentPath ← IO.ofExcept $ config.getObjValAs? String "assignment_path"
-    let curAsgnFilePath : FilePath := repoName / assignmentPath
+    let curAsgnFilePath : FilePath := agPathPrefix / repoName / assignmentPath
     IO.FS.rename curAsgnFilePath templateFile
     IO.FS.removeDirAll repoName
   else
