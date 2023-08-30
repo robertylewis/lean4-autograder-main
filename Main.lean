@@ -72,13 +72,14 @@ def getTemplateFromGitHub : Unit → IO Unit := λ _ => do
   let config ← IO.ofExcept $ Json.parse configRaw
   let templateFile : FilePath := agPathPrefix / "AutograderTests" / "Solution.lean"
   if ← templateFile.pathExists then FS.removeFile templateFile
-  let repoPath ← IO.ofExcept $ config.getObjValAs? String "public_repo"
+  let repoURLPath ← IO.ofExcept $ config.getObjValAs? String "public_repo"
   
-  if let some repoName := (repoPath.splitOn "/").getLast? then
+  if let some repoName := (repoURLPath.splitOn "/").getLast? then
     -- Download the repo
+    let repoLocalPath : FilePath := agPathPrefix / repoName
     let out ← IO.Process.output {
       cmd := "git"
-      args := #["clone", s!"https://github.com/{repoPath}", (agPathPrefix / repoName).toString]
+      args := #["clone", s!"https://github.com/{repoPath}", repoLocalPath.toString]
     }
     if out.exitCode != 0 then
       throw <| IO.userError s!"Failed to download public repo from GitHub"
@@ -87,7 +88,7 @@ def getTemplateFromGitHub : Unit → IO Unit := λ _ => do
     let assignmentPath ← IO.ofExcept $ config.getObjValAs? String "assignment_path"
     let curAsgnFilePath : FilePath := agPathPrefix / repoName / assignmentPath
     IO.FS.rename curAsgnFilePath templateFile
-    IO.FS.removeDirAll repoName
+    IO.FS.removeDirAll repoLocalPath
   else
     throw <| IO.userError s!"Invalid public_repo found in autograder_config.json"
 
