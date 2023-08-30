@@ -95,6 +95,7 @@ def getTemplateFromGitHub : Unit → IO Unit := λ _ => do
 def main (args : List String) : IO Unit := do
   let usage := throw <| IO.userError s!"Usage: autograder Exercise.Sheet.Module submission-file.lean"
   let [sheetName, submission] := args | usage
+  getTemplateFromGitHub ()
   let submission : FilePath := submission
   let some sheetName := Syntax.decodeNameLit ("`" ++ sheetName) | usage
   searchPathRef.set (← addSearchPathFromEnv {})
