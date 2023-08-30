@@ -79,7 +79,7 @@ def getTemplateFromGitHub : Unit → IO Unit := λ _ => do
     let repoLocalPath : FilePath := agPathPrefix / repoName
     let out ← IO.Process.output {
       cmd := "git"
-      args := #["clone", s!"https://github.com/{repoLocalPath}", repoLocalPath.toString]
+      args := #["clone", s!"https://github.com/{repoURLPath}", repoLocalPath.toString]
     }
     if out.exitCode != 0 then
       throw <| IO.userError s!"Failed to download public repo from GitHub"
