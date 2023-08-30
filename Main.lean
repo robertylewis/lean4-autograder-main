@@ -22,8 +22,8 @@ def Lean.Environment.moduleOfDecl? (decl : Name) (env : Environment) : Option Na
   let modIdx : Nat ← env.getModuleIdxFor? decl
   env.header.moduleNames[modIdx]?
 
--- TODO: why isn't `funext` valid?
-def validAxioms : Array Name := #["Classical.choice".toName, "Quot.sound".toName, "propext".toName] 
+def validAxioms : Array Name :=
+  #["Classical.choice".toName, "Quot.sound".toName, "propext".toName, "funext".toName] 
 
 def usedAxiomsAreValid (submissionAxioms : List Name) : Bool := 
   match submissionAxioms with 
