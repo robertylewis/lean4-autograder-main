@@ -97,10 +97,11 @@ def compileTests : Unit → IO Unit := λ _ => do
   let badAgPath := agPathPrefix / "bad_autograder_error.json"
   let studentErrorPath := agPathPrefix / "fails_to_compile_error.json"
   -- Check that the template compiles
-  let out ← IO.Process.output {
-    cmd := "bash"
-    args := #["~/.elan/bin/lake", "build", "autograder", "AutograderTests"]
+  let compileArgs : Process.SpawnArgs := {
+    cmd := "env"
+    args := #["bash", "/root/.elan/bin/lake", "build", "autograder", "AutograderTests"]
   }
+  let out ← IO.Process.output compileArgs
   IO.println $ "OUT: " ++ out.stdout
   IO.println $ "ERR: " ++ out.stderr
   if out.exitCode != 0 then
@@ -110,10 +111,7 @@ def compileTests : Unit → IO Unit := λ _ => do
   -- Check that the student submission compiles
   let studentAsgnPath : FilePath := agPathPrefix / "AutograderTests" / "Assignment.lean"
   IO.FS.writeFile studentAsgnPath (← IO.FS.readFile "Assignment.lean")
-  let out ← IO.Process.output {
-    cmd := "bash"
-    args := #["~/.elan/bin/lake", "build", "autograder", "AutograderTests"]
-  }
+  let out ← IO.Process.output compileArgs
   if out.exitCode != 0 then
     IO.FS.writeFile resultsPath (← IO.FS.readFile studentErrorPath)
     throw <| IO.userError s!"Student submission failed to compile"
