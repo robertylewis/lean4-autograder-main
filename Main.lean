@@ -101,6 +101,8 @@ def compileTests : Unit → IO Unit := λ _ => do
     cmd := "~/.elan/bin/lake"
     args := #["build", "autograder", "AutograderTests"]
   }
+  IO.println $ "OUT: " ++ out.stdout
+  IO.println $ "ERR: " ++ out.stderr
   if out.exitCode != 0 then
     IO.FS.writeFile resultsPath (← IO.FS.readFile badAgPath)
     throw <| IO.userError s!"Autograder tests failed to compile"
