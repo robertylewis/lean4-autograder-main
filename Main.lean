@@ -119,7 +119,7 @@ def main (args : List String) : IO Unit := do
   getTemplateFromGitHub
   compileTests submission
   let submission : FilePath := submission
-  let sheetName := "{solutionDirName}.{solutionModuleName}".toName
+  let sheetName := s!"{solutionDirName}.{solutionModuleName}".toName
   searchPathRef.set (← addSearchPathFromEnv {})
   let sheet ← importModules [{module := sheetName}] {}
   let submissionBuildDir : FilePath := "build" / "submission"
