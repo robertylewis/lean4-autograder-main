@@ -10,6 +10,6 @@ cp config.json lake-packages/autograder/autograder_config.json
 
 cp /autograder/submission/* Assignment.lean
 
-~/.elan/bin/lake exe cache get 
+~/.elan/bin/lake exe cache get
 
-~/.elan/bin/lake exe autograder AutograderTests.Solution Assignment.lean
+~/.elan/bin/lake exe autograder Assignment.lean

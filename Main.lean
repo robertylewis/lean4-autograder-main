@@ -3,6 +3,10 @@ import AutograderLib
 -- import Mathlib -- ensures Mathlib is compiled when the container is being uploaded
 open Lean IO System Elab Command
 
+def agPathPrefix : FilePath := "lake-packages" / "autograder"
+def solutionDirName := "AutograderTests"
+def solutionModuleName := "Solution"
+
 structure ExerciseResult where
   score : Float
   name : Name
@@ -62,67 +66,60 @@ def gradeSubmission (sheetName : Name) (sheet submission : Environment) : IO (Ar
     throw <| IO.userError "There are no exercises annotated with points in the template; thus, the submission can't be graded."
   return results
 
-def agPathPrefix : FilePath := "lake-packages" / "autograder"
--- TODO: now that this is no longer a separate Python script, we could probably
--- avoid having to pass in the template name as a command-line arg to `main`
--- (just extract it to a global Lean variable here)
-def getTemplateFromGitHub : Unit → IO Unit := λ _ => do
+def getTemplateFromGitHub : IO Unit := do
   -- Read JSON config
   let configRaw ← IO.FS.readFile (agPathPrefix / "autograder_config.json")
   let config ← IO.ofExcept $ Json.parse configRaw
-  let templateFile : FilePath := agPathPrefix / "AutograderTests" / "Solution.lean"
+  let templateFile : FilePath := agPathPrefix / solutionDirName / s!"{solutionModuleName}.lean"
   if ← templateFile.pathExists then FS.removeFile templateFile
   let repoURLPath ← IO.ofExcept $ config.getObjValAs? String "public_repo"
+  let some repoName := (repoURLPath.splitOn "/").getLast? 
+    | throw <| IO.userError s!"Invalid public_repo found in autograder_config.json"
   
-  if let some repoName := (repoURLPath.splitOn "/").getLast? then
-    -- Download the repo
-    let repoLocalPath : FilePath := agPathPrefix / repoName
-    let out ← IO.Process.output {
-      cmd := "git"
-      args := #["clone", s!"https://github.com/{repoURLPath}", repoLocalPath.toString]
-    }
-    if out.exitCode != 0 then
-      throw <| IO.userError s!"Failed to download public repo from GitHub"
-    
-    -- Move the assignment to the correct location; delete the rest
-    let assignmentPath ← IO.ofExcept $ config.getObjValAs? String "assignment_path"
-    let curAsgnFilePath : FilePath := agPathPrefix / repoName / assignmentPath
-    IO.FS.rename curAsgnFilePath templateFile
-    IO.FS.removeDirAll repoLocalPath
-  else
-    throw <| IO.userError s!"Invalid public_repo found in autograder_config.json"
+  -- Download the repo
+  let repoLocalPath : FilePath := agPathPrefix / repoName
+  let out ← IO.Process.output {
+    cmd := "git"
+    args := #["clone", s!"https://github.com/{repoURLPath}", repoLocalPath.toString]
+  }
+  if out.exitCode != 0 then
+    throw <| IO.userError s!"Failed to download public repo from GitHub"
+  
+  -- Move the assignment to the correct location; delete the cloned repo
+  let assignmentPath ← IO.ofExcept $ config.getObjValAs? String "assignment_path"
+  let curAsgnFilePath : FilePath := agPathPrefix / repoName / assignmentPath
+  IO.FS.rename curAsgnFilePath templateFile
+  IO.FS.removeDirAll repoLocalPath
 
-def compileTests : Unit → IO Unit := λ _ => do
+def compileTests (submissionName : String) : IO Unit := do
   let resultsPath : FilePath := ".." / "results" / "results.json"
   let badAgPath := agPathPrefix / "bad_autograder_error.json"
   let studentErrorPath := agPathPrefix / "fails_to_compile_error.json"
-  -- Check that the template compiles
+  -- Check that the template compiles sans student submission
   let compileArgs : Process.SpawnArgs := {
     cmd := "/root/.elan/bin/lake"
-    args := #["build", "autograder", "AutograderTests"]
+    args := #["build", "autograder", solutionDirName]
   }
   let out ← IO.Process.output compileArgs
-  IO.println $ "OUT: " ++ out.stdout
-  IO.println $ "ERR: " ++ out.stderr
   if out.exitCode != 0 then
     IO.FS.writeFile resultsPath (← IO.FS.readFile badAgPath)
     throw <| IO.userError s!"Autograder tests failed to compile"
   
-  -- Check that the student submission compiles
-  let studentAsgnPath : FilePath := agPathPrefix / "AutograderTests" / "Assignment.lean"
-  IO.FS.writeFile studentAsgnPath (← IO.FS.readFile "Assignment.lean")
+  -- Compile the student submission
+  let studentAsgnPath : FilePath := agPathPrefix / solutionDirName / submissionName
+  IO.FS.writeFile studentAsgnPath (← IO.FS.readFile submissionName)
   let out ← IO.Process.output compileArgs
   if out.exitCode != 0 then
     IO.FS.writeFile resultsPath (← IO.FS.readFile studentErrorPath)
     throw <| IO.userError s!"Student submission failed to compile"
 
 def main (args : List String) : IO Unit := do
-  let usage := throw <| IO.userError s!"Usage: autograder Exercise.Sheet.Module submission-file.lean"
-  let [sheetName, submission] := args | usage
-  getTemplateFromGitHub ()
-  compileTests ()
+  let usage := throw <| IO.userError s!"Usage: autograder submission-file.lean"
+  let [submission] := args | usage
+  getTemplateFromGitHub
+  compileTests submission
   let submission : FilePath := submission
-  let some sheetName := Syntax.decodeNameLit ("`" ++ sheetName) | usage
+  let sheetName := "`{solutionDirName}.{solutionModuleName}".toName
   searchPathRef.set (← addSearchPathFromEnv {})
   let sheet ← importModules [{module := sheetName}] {}
   let submissionBuildDir : FilePath := "build" / "submission"
