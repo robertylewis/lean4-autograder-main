@@ -3,9 +3,11 @@ import AutograderLib
 -- import Mathlib -- ensures Mathlib is compiled when the container is being uploaded
 open Lean IO System Elab Command
 
-def agPathPrefix : FilePath := "lake-packages" / "autograder"
+def agPkgPathPrefix : FilePath := "lake-packages" / "autograder"
 def solutionDirName := "AutograderTests"
 def solutionModuleName := "Solution"
+def submissionFileName := "Assignment.lean"
+def submissionUploadDir : FilePath := "/autograder/submission"
 
 -- Used for non-exercise-specific results (e.g., global failures)
 structure GradescopeResult where
@@ -73,18 +75,44 @@ def gradeSubmission (sheetName : Name) (sheet submission : Environment) : IO (Ar
         ++ "submission can't be graded."
   return results
 
+-- Throw error and show it to the student
+def exitWithError (errMsg : String) : IO Unit := do
+  let resultsPath : FilePath := ".." / "results" / "results.json"
+  let result : GradescopeResult := {output := errMsg, score := 0.0}
+  IO.FS.writeFile resultsPath (toJson result).pretty
+  throw <| IO.userError errMsg
+
+-- TODO: should we warn if more than one Lean file submitted?
+def moveFilesIntoPlace : IO Unit := do
+  -- Copy the assignment's config file to the autograder directory
+  IO.FS.writeFile (agPkgPathPrefix / "autograder_config.json")
+      (← IO.FS.readFile "config.json")
+
+  -- Copy the student's submission to the autograder directory. They should only
+  -- have uploaded one Lean file; if they submitted more, we pick the first
+  let submittedFiles ← submissionUploadDir.readDir
+  let leanFile? := submittedFiles
+    |> Array.filter (λ f => f.path.extension == some "lean")
+    |> Array.get? (i := 0)
+  if let some leanFile := leanFile? then
+    IO.FS.writeFile submissionFileName (← IO.FS.readFile leanFile.path)
+  else
+    exitWithError <| "No Lean file was found in your submission. Make sure to "
+        ++ "upload a single .lean file containing your solutions."
+  
+
 def getTemplateFromGitHub : IO Unit := do
   -- Read JSON config
-  let configRaw ← IO.FS.readFile (agPathPrefix / "autograder_config.json")
+  let configRaw ← IO.FS.readFile (agPkgPathPrefix / "autograder_config.json")
   let config ← IO.ofExcept $ Json.parse configRaw
-  let templateFile : FilePath := agPathPrefix / solutionDirName / s!"{solutionModuleName}.lean"
+  let templateFile : FilePath := agPkgPathPrefix / solutionDirName / s!"{solutionModuleName}.lean"
   if ← templateFile.pathExists then FS.removeFile templateFile
   let repoURLPath ← IO.ofExcept $ config.getObjValAs? String "public_repo"
   let some repoName := (repoURLPath.splitOn "/").getLast? 
     | throw <| IO.userError s!"Invalid public_repo found in autograder_config.json"
   
   -- Download the repo
-  let repoLocalPath : FilePath := agPathPrefix / repoName
+  let repoLocalPath : FilePath := agPkgPathPrefix / repoName
   let out ← IO.Process.output {
     cmd := "git"
     args := #["clone", s!"https://github.com/{repoURLPath}", repoLocalPath.toString]
@@ -94,16 +122,9 @@ def getTemplateFromGitHub : IO Unit := do
   
   -- Move the assignment to the correct location; delete the cloned repo
   let assignmentPath ← IO.ofExcept $ config.getObjValAs? String "assignment_path"
-  let curAsgnFilePath : FilePath := agPathPrefix / repoName / assignmentPath
+  let curAsgnFilePath : FilePath := agPkgPathPrefix / repoName / assignmentPath
   IO.FS.rename curAsgnFilePath templateFile
   IO.FS.removeDirAll repoLocalPath
-
--- Throw error and show it to the student
-def exitWithError (errMsg : String) : IO Unit := do
-  let resultsPath : FilePath := ".." / "results" / "results.json"
-  let result : GradescopeResult := {output := errMsg, score := 0.0}
-  IO.FS.writeFile resultsPath (toJson result).pretty
-  throw <| IO.userError errMsg
 
 def compileTests (submissionName : String) : IO Unit := do
   -- Check that the template compiles sans student submission
@@ -118,7 +139,7 @@ def compileTests (submissionName : String) : IO Unit := do
         ++ "your instructor know and provide a link to this Gradescope submission."
   
   -- Compile with the student submission
-  let studentAsgnPath : FilePath := agPathPrefix / solutionDirName / submissionName
+  let studentAsgnPath : FilePath := agPkgPathPrefix / solutionDirName / submissionName
   IO.FS.writeFile studentAsgnPath (← IO.FS.readFile submissionName)
   let out ← IO.Process.output compileArgs
   if out.exitCode != 0 then
@@ -126,12 +147,13 @@ def compileTests (submissionName : String) : IO Unit := do
       "Your file failed to compile. There must be some red error messages "
         ++ "remaining in it. Fix these, and submit again!"
 
-def main (args : List String) : IO Unit := do
-  let usage := throw <| IO.userError s!"Usage: autograder submission-file.lean"
-  let [submission] := args | usage
+def main : IO Unit := do
+  -- Get files into their appropriate locations
+  moveFilesIntoPlace
   getTemplateFromGitHub
-  compileTests submission
-  let submission : FilePath := submission
+  compileTests submissionFileName
+
+  -- Grade
   let sheetName := s!"{solutionDirName}.{solutionModuleName}".toName
   searchPathRef.set (← addSearchPathFromEnv {})
   let sheet ← importModules [{module := sheetName}] {}
@@ -144,11 +166,11 @@ def main (args : List String) : IO Unit := do
     try
       let out ← IO.Process.output {
         cmd := "lean"
-        args := #[submission.toString, "-o", submissionOlean.toString]
+        args := #[submissionFileName, "-o", submissionOlean.toString]
       }
       if out.exitCode != 0 then
         let result : ExerciseResult := {
-            name := toString submission,
+            name := submissionFileName,
             status := "failed",
             output := out.stderr,
             score := 0.0
@@ -159,6 +181,7 @@ def main (args : List String) : IO Unit := do
       searchPathRef.modify fun sp => submissionBuildDir :: sp
       -- Is `importModules` silently failing? If so, it might be because the
       -- autograder has not been allocated enough resources on Gradescope!
+      -- TODO: look into replacing with `process`
       importModules [{module := `Submission}] {}
     catch ex =>
       errors := errors.push ex.toString
