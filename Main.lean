@@ -157,7 +157,7 @@ def main : IO Unit := do
   let sheetName := s!"{solutionDirName}.{solutionModuleName}".toName
   searchPathRef.set (← addSearchPathFromEnv {})
   let sheet ← importModules [{module := sheetName}] {}
-  let (submissionEnv, _) ← process "" (← mkEmptyEnvironment) {}
+  let (submissionEnv, _) ← process "" (← mkEmptyEnvironment) {} submissionFileName
   -- let submissionBuildDir : FilePath := "build" / "submission"
   -- FS.createDirAll submissionBuildDir
   -- let submissionOlean := submissionBuildDir / "Submission.olean"
