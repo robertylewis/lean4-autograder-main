@@ -7,11 +7,15 @@ def agPathPrefix : FilePath := "lake-packages" / "autograder"
 def solutionDirName := "AutograderTests"
 def solutionModuleName := "Solution"
 
-structure ExerciseResult where
+-- Used for non-exercise-specific results (e.g., global failures)
+structure GradescopeResult where
   score : Float
+  output : String
+  deriving ToJson
+
+structure ExerciseResult extends GradescopeResult where
   name : Name
   status : String
-  output : String
   deriving ToJson
 
 structure GradingResults where
@@ -91,10 +95,14 @@ def getTemplateFromGitHub : IO Unit := do
   IO.FS.rename curAsgnFilePath templateFile
   IO.FS.removeDirAll repoLocalPath
 
-def compileTests (submissionName : String) : IO Unit := do
+-- Throw error and show it to the student
+def exitWithError (errMsg : String) : IO Unit := do
   let resultsPath : FilePath := ".." / "results" / "results.json"
-  let badAgPath := agPathPrefix / "bad_autograder_error.json"
-  let studentErrorPath := agPathPrefix / "fails_to_compile_error.json"
+  let result : GradescopeResult := {output := errMsg, score := 0.0}
+  IO.FS.writeFile resultsPath (toJson result).pretty
+  throw <| IO.userError errMsg
+
+def compileTests (submissionName : String) : IO Unit := do
   -- Check that the template compiles sans student submission
   let compileArgs : Process.SpawnArgs := {
     cmd := "/root/.elan/bin/lake"
@@ -102,16 +110,18 @@ def compileTests (submissionName : String) : IO Unit := do
   }
   let out ← IO.Process.output compileArgs
   if out.exitCode != 0 then
-    IO.FS.writeFile resultsPath (← IO.FS.readFile badAgPath)
-    throw <| IO.userError s!"Autograder tests failed to compile"
+    exitWithError $
+      "The autograder failed to compile itself. This is unexpected. Please let "
+        ++ "your instructor know and provide a link to this Gradescope submission."
   
-  -- Compile the student submission
+  -- Compile with the student submission
   let studentAsgnPath : FilePath := agPathPrefix / solutionDirName / submissionName
   IO.FS.writeFile studentAsgnPath (← IO.FS.readFile submissionName)
   let out ← IO.Process.output compileArgs
   if out.exitCode != 0 then
-    IO.FS.writeFile resultsPath (← IO.FS.readFile studentErrorPath)
-    throw <| IO.userError s!"Student submission failed to compile"
+    exitWithError $
+      "Your file failed to compile. There must be some red error messages "
+        ++ "remaining in it. Fix these, and submit again!"
 
 def main (args : List String) : IO Unit := do
   let usage := throw <| IO.userError s!"Usage: autograder submission-file.lean"
