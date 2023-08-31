@@ -157,7 +157,7 @@ def main : IO Unit := do
   let sheetName := s!"{solutionDirName}.{solutionModuleName}".toName
   searchPathRef.set (← addSearchPathFromEnv {})
   let sheet ← importModules [{module := sheetName}] {}
-  let (submissionEnv, output) ← process "" (← mkEmptyEnvironment) {} submissionFileName
+  let (submissionEnv, output) ← process (← IO.FS.readFile submissionFileName) (← mkEmptyEnvironment) {}
   let os ← output.toList.mapM (λ m => m.toString)
   IO.println os
   -- FIXME: not working
