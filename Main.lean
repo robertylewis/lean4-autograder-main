@@ -158,7 +158,6 @@ def main : IO Unit := do
   searchPathRef.set (← addSearchPathFromEnv {})
   let sheet ← importModules [{module := sheetName}] {}
   let (submissionEnv, _) ← process "" (← mkEmptyEnvironment) {}
-  initSearchPath (← findSysroot)
   -- let submissionBuildDir : FilePath := "build" / "submission"
   -- FS.createDirAll submissionBuildDir
   -- let submissionOlean := submissionBuildDir / "Submission.olean"
