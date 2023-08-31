@@ -65,9 +65,12 @@ def gradeSubmission (sheetName : Name) (sheet submission : Environment) : IO (Ar
           pure { name, status := "failed", output := "Declaration not found in submission", score := 0.0 }
       results := results.push result
 
-  -- TODO: do we actually need this?
-  -- if results.size == 0 then  
-  --   throw <| IO.userError "There are no exercises annotated with points in the template; thus, the submission can't be graded."
+  -- Gradescope will not accept an empty tests list, and this most likely
+  -- indicates a misconfiguration anyway
+  if results.size == 0 then
+    throw <| IO.userError <|
+      "There are no exercises annotated with points in the template; thus, the "
+        ++ "submission can't be graded."
   return results
 
 def getTemplateFromGitHub : IO Unit := do
