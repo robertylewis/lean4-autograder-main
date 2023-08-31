@@ -66,8 +66,8 @@ def gradeSubmission (sheetName : Name) (sheet submission : Environment) : IO (Ar
       results := results.push result
 
   -- TODO: do we actually need this?
-  if results.size == 0 then  
-    throw <| IO.userError "There are no exercises annotated with points in the template; thus, the submission can't be graded."
+  -- if results.size == 0 then  
+  --   throw <| IO.userError "There are no exercises annotated with points in the template; thus, the submission can't be graded."
   return results
 
 def getTemplateFromGitHub : IO Unit := do
@@ -144,7 +144,12 @@ def main (args : List String) : IO Unit := do
         args := #[submission.toString, "-o", submissionOlean.toString]
       }
       if out.exitCode != 0 then
-        let result : ExerciseResult := { name := toString submission, status := "failed", output := out.stderr , score := 0.0 }
+        let result : ExerciseResult := {
+            name := toString submission,
+            status := "failed",
+            output := out.stderr,
+            score := 0.0
+        }
         let results : GradingResults := { tests := #[result] }
         IO.FS.writeFile "../results/results.json" (toJson results).pretty
         throw <| IO.userError s!"Lean exited with code {out.exitCode}:\n{out.stderr}"
