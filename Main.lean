@@ -147,7 +147,7 @@ def compileTests (submissionName : String) : IO Unit := do
       "Your file failed to compile. There must be some red error messages "
         ++ "remaining in it. Fix these, and submit again!"
 
-def main : IO Unit := do
+unsafe def main : IO Unit := do
   -- Get files into their appropriate locations
   moveFilesIntoPlace
   getTemplateFromGitHub
