@@ -22,7 +22,7 @@ structure ExerciseResult extends GradescopeResult where
 
 structure GradingResults where
   tests : Array ExerciseResult
-  outputFormat: String
+  output_format: String
   output: String
   deriving ToJson
 
@@ -178,9 +178,9 @@ def main : IO Unit := do
   -- TODO: do messages from the header propagate?
   let output :=
     if messages.hasErrors
-    then "Your submission contains one or more errors, which are listed below. "
-          ++ "You should attempt to correct these errors prior to your final "
-          ++ "submission.\n\n"
+    then "Warning: Your submission contains one or more errors, which are "
+          ++ "listed below. You should attempt to correct these errors prior "
+          ++ "to your final submission.\n\n"
           ++ errorTxt
     else ""
   
@@ -219,7 +219,7 @@ def main : IO Unit := do
   --     errors := errors.push ex.toString
   --     importModules sheet.header.imports.toList {}
   let tests ← gradeSubmission sheetName sheet submissionEnv
-  let results : GradingResults := { tests, output, outputFormat := "text" }
+  let results : GradingResults := { tests, output, output_format := "text" }
   IO.FS.writeFile "../results/results.json" (toJson results).pretty
   -- if errors.size == 0 then
   --   IO.FS.writeFile "../results/results.json" (toJson results).pretty
