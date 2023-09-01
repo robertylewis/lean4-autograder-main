@@ -166,6 +166,11 @@ def main : IO Unit := do
   let inputCtx := Parser.mkInputContext (← IO.FS.readFile submissionFileName) "<input>"
   let (header, parserState, messages) ← Parser.parseHeader inputCtx
   let (headerEnv, messages) ← processHeader header {} messages inputCtx
+
+  -- TODO: is there any way the header could have errors and the body could
+  -- still compile? If not, we should just error here and tell the student their
+  -- file is broken so they don't get a bunch of confusing error messages later
+  -- on.
   let cmdState : Command.State := Command.mkState headerEnv messages {}
   let frontEndState ← IO.processCommands inputCtx parserState cmdState
   let messages := frontEndState.commandState.messages
@@ -175,13 +180,15 @@ def main : IO Unit := do
   let errors ← errorMsgs.mapM (λ m => m.toString)
   let errorTxt := errors.foldl (λ acc e => acc ++ "\n" ++ e) ""
 
-  -- TODO: do messages from the header propagate?
+  let escapeHtml (s : String) :=
+    [("<", "&lt;"), (">", "&gt;"), ("&", "&amp;"), ("\"", "&quot;")].foldl
+      (λ acc (char, repl) => acc.replace char repl) s
   let output :=
     if messages.hasErrors
-    then "Warning: Your submission contains one or more errors, which are "
+    then "<p><strong>Warning</strong>: Your submission contains one or more errors, which are "
           ++ "listed below. You should attempt to correct these errors prior "
-          ++ "to your final submission.\n\n"
-          ++ errorTxt
+          ++ "to your final submission.</p>"
+          ++ "<pre>" ++ escapeHtml errorTxt ++ "</pre>"
     else ""
   
   -- Debug
@@ -219,7 +226,7 @@ def main : IO Unit := do
   --     errors := errors.push ex.toString
   --     importModules sheet.header.imports.toList {}
   let tests ← gradeSubmission sheetName sheet submissionEnv
-  let results : GradingResults := { tests, output, output_format := "ansi" }
+  let results : GradingResults := { tests, output, output_format := "html" }
   IO.FS.writeFile "../results/results.json" (toJson results).pretty
   -- if errors.size == 0 then
   --   IO.FS.writeFile "../results/results.json" (toJson results).pretty
