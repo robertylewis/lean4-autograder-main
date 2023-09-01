@@ -180,6 +180,10 @@ def main : IO Unit := do
           ++ "submission.\n\n"
           ++ errorTxt
     else ""
+  
+  -- Debug
+  let os ← messages.toList.mapM (λ m => m.toString)
+  IO.println os
 
   -- FIXME: not working
   -- let submissionBuildDir : FilePath := "build" / "submission"
