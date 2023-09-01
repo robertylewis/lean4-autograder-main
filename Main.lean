@@ -168,11 +168,14 @@ def main : IO Unit := do
   let (headerEnv, messages) ← processHeader header {} messages inputCtx
   let cmdState : Command.State := Command.mkState headerEnv messages {}
   let frontEndState ← IO.processCommands inputCtx parserState cmdState
+  let messages := frontEndState.commandState.messages
   let submissionEnv := frontEndState.commandState.env
 
   let errorMsgs := messages.msgs.filter (λ m => m.severity == .error)
   let errors ← errorMsgs.mapM (λ m => m.toString)
   let errorTxt := errors.foldl (λ acc e => e ++ "\n\n" ++ acc) ""
+
+  -- TODO: do messages from the header propagate?
   let output :=
     if messages.hasErrors
     then "Your submission contains one or more errors, which are listed below. "
