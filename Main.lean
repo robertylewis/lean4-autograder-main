@@ -10,12 +10,15 @@ def submissionFileName := "Assignment.lean"
 def submissionUploadDir : FilePath := "/autograder/submission"
 
 -- Used for non-exercise-specific results (e.g., global failures)
-structure GradescopeResult where
-  score : Float
+structure FailureResult where
   output : String
+  score : Float := 0.0
+  output_format : String := "text"
   deriving ToJson
 
-structure ExerciseResult extends GradescopeResult where
+structure ExerciseResult where
+  score : Float
+  output : String
   name : Name
   status : String
   deriving ToJson
@@ -84,7 +87,7 @@ def gradeSubmission (sheetName : Name) (sheet submission : Environment) : IO (Ar
 -- Throw error and show it to the student
 def exitWithError (errMsg : String) : IO Unit := do
   let resultsPath : FilePath := ".." / "results" / "results.json"
-  let result : GradescopeResult := {output := errMsg, score := 0.0}
+  let result : FailureResult := {output := errMsg}
   IO.FS.writeFile resultsPath (toJson result).pretty
   throw <| IO.userError errMsg
 
@@ -105,10 +108,10 @@ def moveFilesIntoPlace : IO (String × String) := do
     IO.FS.writeFile submissionFileName (← IO.FS.readFile leanFile.path)
     let output :=
       if leanFiles.size > 1
-      then "<p><strong>Warning:</strong> you submitted multiple Lean files. The autograder expects "
-        ++ "you to submit a single Lean file with your solutions. It has "
-        ++ s!"picked {escapeHtml leanFile.fileName} to grade; this may not be the file "
-        ++ "you intended to be graded.\n\n</p>"
+      then "<p><strong>Warning:</strong> you submitted multiple Lean files. "
+        ++ "The autograder expects you to submit a single Lean file with your "
+        ++ s!"solutions. It has picked {escapeHtml leanFile.fileName} to "
+        ++ "grade; this may not be the file you intended to be graded.\n\n</p>"
       else ""
     pure (leanFile.fileName, output)
   else
