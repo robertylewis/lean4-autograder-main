@@ -22,6 +22,8 @@ structure ExerciseResult extends GradescopeResult where
 
 structure GradingResults where
   tests : Array ExerciseResult
+  outputFormat: String
+  output: String
   deriving ToJson
 
 def Lean.Environment.moduleDataOf? (module : Name) (env : Environment) : Option ModuleData := do
@@ -168,10 +170,17 @@ def main : IO Unit := do
   let frontEndState ← IO.processCommands inputCtx parserState cmdState
   let submissionEnv := frontEndState.commandState.env
 
-  -- TODO:
-  -- if output.hasErrors then
-  let os ← messages.toList.mapM (λ m => m.toString)
-  IO.println os
+  let errorMsgs := messages.msgs.filter (λ m => m.severity == .error)
+  let errors ← errorMsgs.mapM (λ m => m.toString)
+  let errorTxt := errors.foldl (λ acc e => e ++ "\n\n" ++ acc) ""
+  let output :=
+    if messages.hasErrors
+    then "Your submission contains one or more errors, which are listed below. "
+          ++ "You should attempt to correct these errors prior to your final "
+          ++ "submission.\n\n"
+          ++ errorTxt
+    else ""
+
   -- FIXME: not working
   -- let submissionBuildDir : FilePath := "build" / "submission"
   -- FS.createDirAll submissionBuildDir
@@ -203,7 +212,7 @@ def main : IO Unit := do
   --     errors := errors.push ex.toString
   --     importModules sheet.header.imports.toList {}
   let tests ← gradeSubmission sheetName sheet submissionEnv
-  let results : GradingResults := { tests }
+  let results : GradingResults := { tests, output, outputFormat := "text" }
   IO.FS.writeFile "../results/results.json" (toJson results).pretty
   -- if errors.size == 0 then
   --   IO.FS.writeFile "../results/results.json" (toJson results).pretty
