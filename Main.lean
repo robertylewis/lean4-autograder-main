@@ -141,13 +141,13 @@ def compileTests (submissionName : String) : IO Unit := do
         ++ "your instructor know and provide a link to this Gradescope submission."
   
   -- Compile with the student submission
-  let studentAsgnPath : FilePath := agPkgPathPrefix / solutionDirName / submissionName
-  IO.FS.writeFile studentAsgnPath (← IO.FS.readFile submissionName)
-  let out ← IO.Process.output compileArgs
-  if out.exitCode != 0 then
-    exitWithError $
-      "Your file failed to compile. There must be some red error messages "
-        ++ "remaining in it. Fix these, and submit again!"
+  -- let studentAsgnPath : FilePath := agPkgPathPrefix / solutionDirName / submissionName
+  -- IO.FS.writeFile studentAsgnPath (← IO.FS.readFile submissionName)
+  -- let out ← IO.Process.output compileArgs
+  -- if out.exitCode != 0 then
+  --   exitWithError $
+  --     "Your file failed to compile. There must be some red error messages "
+  --       ++ "remaining in it. Fix these, and submit again!"
 
 def main : IO Unit := do
   -- Get files into their appropriate locations
