@@ -163,6 +163,12 @@ def checkAutograderCompiles : IO Unit := do
   --     "Your file failed to compile. There must be some red error messages "
   --       ++ "remaining in it. Fix these, and submit again!"
 
+def getErrorsStr (ml : MessageLog) : IO String := do
+  let errorMsgs := ml.msgs.filter (λ m => m.severity == .error)
+  let errors ← errorMsgs.mapM (λ m => m.toString)
+  let errorTxt := errors.foldl (λ acc e => acc ++ "\n" ++ e) ""
+  return errorTxt
+
 def main : IO Unit := do
   -- Get files into their appropriate locations
   let (studentFileName, output) ← moveFilesIntoPlace
@@ -181,6 +187,14 @@ def main : IO Unit := do
   let (header, parserState, messages) ← Parser.parseHeader inputCtx
   let (headerEnv, messages) ← processHeader header {} messages inputCtx
 
+  if messages.hasErrors then
+    exitWithError <|
+      "Your Lean file could not be processed because its header contains "
+      ++ "errors. This is likely because you are attempting to import a module "
+      ++ "that does not exist. Please correct these errors and resubmit. A log "
+      ++ "of the encountered errors is provided below:\n\n"
+      ++ (← getErrorsStr messages)
+
   -- TODO: is there any way the header could have errors and the body could
   -- still compile? If not, we should just error here and tell the student their
   -- file is broken so they don't get a bunch of confusing error messages later
@@ -190,10 +204,6 @@ def main : IO Unit := do
   let messages := frontEndState.commandState.messages
   let submissionEnv := frontEndState.commandState.env
 
-  let errorMsgs := messages.msgs.filter (λ m => m.severity == .error)
-  let errors ← errorMsgs.mapM (λ m => m.toString)
-  let errorTxt := errors.foldl (λ acc e => acc ++ "\n" ++ e) ""
-
   -- TODO: Gradescope won't render escaped characters properly
   -- If can't figure this out, switch the output_format back to "text" and live
   -- with the ugliness
@@ -202,7 +212,7 @@ def main : IO Unit := do
     then "<p><strong>Warning:</strong> Your submission contains one or more "
           ++ "errors, which are listed below. You should attempt to correct "
           ++ "these errors prior to your final submission.</p>"
-          ++ "<pre>" ++ escapeHtml errorTxt ++ "</pre>"
+          ++ "<pre>" ++ escapeHtml (← getErrorsStr messages) ++ "</pre>"
     else ""
   
   -- Debug
