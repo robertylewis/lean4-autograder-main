@@ -147,7 +147,7 @@ def compileTests (submissionName : String) : IO Unit := do
       "Your file failed to compile. There must be some red error messages "
         ++ "remaining in it. Fix these, and submit again!"
 
-unsafe def main : IO Unit := do
+def main : IO Unit := do
   -- Get files into their appropriate locations
   moveFilesIntoPlace
   getTemplateFromGitHub
@@ -163,8 +163,6 @@ unsafe def main : IO Unit := do
   -- Source: https://github.com/adamtopaz/lean_grader/blob/master/Main.lean
   let inputCtx := Parser.mkInputContext (← IO.FS.readFile submissionFileName) "<input>"
   let (header, parserState, messages) ← Parser.parseHeader inputCtx
-  enableInitializersExecution
-  initSearchPath (← findSysroot)
   let (headerEnv, messages) ← processHeader header {} messages inputCtx
   let cmdState : Command.State := Command.mkState headerEnv messages {}
   let frontEndState ← IO.processCommands inputCtx parserState cmdState
