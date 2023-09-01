@@ -25,8 +25,8 @@ structure ExerciseResult where
 
 structure GradingResults where
   tests : Array ExerciseResult
-  output_format: String
   output: String
+  output_format: String := "text"
   deriving ToJson
 
 def Lean.Environment.moduleDataOf? (module : Name) (env : Environment) : Option ModuleData := do
@@ -108,10 +108,10 @@ def moveFilesIntoPlace : IO (String × String) := do
     IO.FS.writeFile submissionFileName (← IO.FS.readFile leanFile.path)
     let output :=
       if leanFiles.size > 1
-      then "<p><strong>Warning:</strong> you submitted multiple Lean files. "
-        ++ "The autograder expects you to submit a single Lean file with your "
-        ++ s!"solutions. It has picked {escapeHtml leanFile.fileName} to "
-        ++ "grade; this may not be the file you intended to be graded.\n\n</p>"
+      then "Warning: you submitted multiple Lean files. The autograder expects "
+        ++ "you to submit a single Lean file with your solutions. It has "
+        ++ s!"picked {leanFile.fileName} to grade; this may not be "
+        ++ "the file you intended to be graded.\n\n"
       else ""
     pure (leanFile.fileName, output)
   else
@@ -212,10 +212,10 @@ def main : IO Unit := do
   -- with the ugliness
   let output := output ++
     if messages.hasErrors
-    then "<p><strong>Warning:</strong> Your submission contains one or more "
-          ++ "errors, which are listed below. You should attempt to correct "
-          ++ "these errors prior to your final submission.</p>"
-          ++ "<pre>" ++ escapeHtml (← getErrorsStr messages) ++ "</pre>"
+    then "Warning: Your submission contains one or more errors, which are "
+          ++ "listed below. You should attempt to correct these errors prior "
+          ++ "to your final submission."
+          ++ (← getErrorsStr messages)
     else ""
   
   -- Debug
@@ -253,7 +253,7 @@ def main : IO Unit := do
   --     errors := errors.push ex.toString
   --     importModules sheet.header.imports.toList {}
   let tests ← gradeSubmission sheetName sheet submissionEnv
-  let results : GradingResults := { tests, output, output_format := "html" }
+  let results : GradingResults := { tests, output }
   IO.FS.writeFile "../results/results.json" (toJson results).pretty
   -- if errors.size == 0 then
   --   IO.FS.writeFile "../results/results.json" (toJson results).pretty
