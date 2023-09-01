@@ -42,6 +42,10 @@ def usedAxiomsAreValid (submissionAxioms : List Name) : Bool :=
   | [] => true
   | x :: xs => if validAxioms.contains x then usedAxiomsAreValid xs else false
 
+def escapeHtml (s : String) :=
+  [("<", "&lt;"), (">", "&gt;"), ("&", "&amp;"), ("\"", "&quot;")].foldl
+    (λ acc (char, repl) => acc.replace char repl) s
+
 def gradeSubmission (sheetName : Name) (sheet submission : Environment) : IO (Array ExerciseResult) := do
   let some sheetMod := sheet.moduleDataOf? sheetName
     | throw <| IO.userError s!"module name {sheetName} not found"
@@ -85,7 +89,8 @@ def exitWithError (errMsg : String) : IO Unit := do
   throw <| IO.userError errMsg
 
 -- TODO: should we warn if more than one Lean file submitted?
-def moveFilesIntoPlace : IO Unit := do
+-- Returns a tuple of (fileName, outputMessage)
+def moveFilesIntoPlace : IO (String × String) := do
   -- Copy the assignment's config file to the autograder directory
   IO.FS.writeFile (agPkgPathPrefix / "autograder_config.json")
       (← IO.FS.readFile "config.json")
@@ -93,14 +98,23 @@ def moveFilesIntoPlace : IO Unit := do
   -- Copy the student's submission to the autograder directory. They should only
   -- have uploaded one Lean file; if they submitted more, we pick the first
   let submittedFiles ← submissionUploadDir.readDir
-  let leanFile? := submittedFiles
-    |> Array.filter (λ f => f.path.extension == some "lean")
-    |> Array.get? (i := 0)
+  let leanFiles := submittedFiles.filter
+    (λ f => f.path.extension == some "lean")
+  let leanFile? := submittedFiles.get? (i := 0)
   if let some leanFile := leanFile? then
     IO.FS.writeFile submissionFileName (← IO.FS.readFile leanFile.path)
+    let output :=
+      if leanFiles.size > 1
+      then "<p><strong>Warning:</strong> you submitted multiple Lean files. The autograder expects "
+        ++ "you to submit a single Lean file with your solutions. It has "
+        ++ s!"picked {escapeHtml leanFile.fileName} to grade; this may not be the file "
+        ++ "you intended to be graded.\n\n</p>"
+      else ""
+    pure (leanFile.fileName, output)
   else
     exitWithError <| "No Lean file was found in your submission. Make sure to "
         ++ "upload a single .lean file containing your solutions."
+    pure ("", "") 
   
 
 def getTemplateFromGitHub : IO Unit := do
@@ -128,7 +142,7 @@ def getTemplateFromGitHub : IO Unit := do
   IO.FS.rename curAsgnFilePath templateFile
   IO.FS.removeDirAll repoLocalPath
 
-def compileTests (submissionName : String) : IO Unit := do
+def checkAutograderCompiles : IO Unit := do
   -- Check that the template compiles sans student submission
   let compileArgs : Process.SpawnArgs := {
     cmd := "/root/.elan/bin/lake"
@@ -151,9 +165,9 @@ def compileTests (submissionName : String) : IO Unit := do
 
 def main : IO Unit := do
   -- Get files into their appropriate locations
-  moveFilesIntoPlace
+  let (studentFileName, output) ← moveFilesIntoPlace
   getTemplateFromGitHub
-  compileTests submissionFileName
+  checkAutograderCompiles
 
   -- Grade
   let sheetName := s!"{solutionDirName}.{solutionModuleName}".toName
@@ -163,7 +177,7 @@ def main : IO Unit := do
   -- let (submissionEnv, output) ← process (← IO.FS.readFile submissionFileName) (← mkEmptyEnvironment) {}
   
   -- Source: https://github.com/adamtopaz/lean_grader/blob/master/Main.lean
-  let inputCtx := Parser.mkInputContext (← IO.FS.readFile submissionFileName) "<input>"
+  let inputCtx := Parser.mkInputContext (← IO.FS.readFile submissionFileName) studentFileName
   let (header, parserState, messages) ← Parser.parseHeader inputCtx
   let (headerEnv, messages) ← processHeader header {} messages inputCtx
 
@@ -180,15 +194,15 @@ def main : IO Unit := do
   let errors ← errorMsgs.mapM (λ m => m.toString)
   let errorTxt := errors.foldl (λ acc e => acc ++ "\n" ++ e) ""
 
-  let escapeHtml (s : String) :=
-    [("<", "&lt;"), (">", "&gt;"), ("&", "&amp;"), ("\"", "&quot;")].foldl
-      (λ acc (char, repl) => acc.replace char repl) s
-  let output :=
+  -- TODO: Gradescope won't render escaped characters properly
+  -- If can't figure this out, switch the output_format back to "text" and live
+  -- with the ugliness
+  let output := output ++
     if messages.hasErrors
     then "<p><strong>Warning:</strong> Your submission contains one or more "
           ++ "errors, which are listed below. You should attempt to correct "
           ++ "these errors prior to your final submission.</p>"
-          ++ "<pre>" ++ errorTxt ++ "</pre>"
+          ++ "<pre>" ++ escapeHtml errorTxt ++ "</pre>"
     else ""
   
   -- Debug
