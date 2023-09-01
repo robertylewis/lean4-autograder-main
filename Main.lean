@@ -158,11 +158,21 @@ def main : IO Unit := do
   searchPathRef.set (← addSearchPathFromEnv {})
   let sheet ← importModules [{module := sheetName}] {}
 
-  let (submissionEnv, output) ← process (← IO.FS.readFile submissionFileName) sheet {}
+  -- let (submissionEnv, output) ← process (← IO.FS.readFile submissionFileName) (← mkEmptyEnvironment) {}
   
+  -- Source: https://github.com/adamtopaz/lean_grader/blob/master/Main.lean
+  let inputCtx := Parser.mkInputContext (← IO.FS.readFile submissionFileName) "<input>"
+  let (header, parserState, messages) ← Parser.parseHeader inputCtx
+  enableInitializersExecution
+  initSearchPath (← findSysroot)
+  let (headerEnv, messages) ← processHeader header {} messages inputCtx
+  let cmdState : Command.State := Command.mkState headerEnv messages {}
+  let frontEndState ← IO.processCommands inputCtx parserState cmdState
+  let submissionEnv := frontEndState.commandState.env
+
   -- TODO:
   -- if output.hasErrors then
-  let os ← output.toList.mapM (λ m => m.toString)
+  let os ← messages.toList.mapM (λ m => m.toString)
   IO.println os
   -- FIXME: not working
   -- let submissionBuildDir : FilePath := "build" / "submission"
