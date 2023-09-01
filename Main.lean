@@ -185,10 +185,10 @@ def main : IO Unit := do
       (λ acc (char, repl) => acc.replace char repl) s
   let output :=
     if messages.hasErrors
-    then "<p><strong>Warning</strong>: Your submission contains one or more errors, which are "
-          ++ "listed below. You should attempt to correct these errors prior "
-          ++ "to your final submission.</p>"
-          ++ "<pre>" ++ escapeHtml errorTxt ++ "</pre>"
+    then "<p><strong>Warning:</strong> Your submission contains one or more "
+          ++ "errors, which are listed below. You should attempt to correct "
+          ++ "these errors prior to your final submission.</p>"
+          ++ "<pre>" ++ errorTxt ++ "</pre>"
     else ""
   
   -- Debug
