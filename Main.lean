@@ -173,7 +173,7 @@ def main : IO Unit := do
 
   let errorMsgs := messages.msgs.filter (λ m => m.severity == .error)
   let errors ← errorMsgs.mapM (λ m => m.toString)
-  let errorTxt := errors.foldl (λ acc e => e ++ "\n\n" ++ acc) ""
+  let errorTxt := errors.foldl (λ acc e => acc ++ "\n" ++ e) ""
 
   -- TODO: do messages from the header propagate?
   let output :=
@@ -219,7 +219,7 @@ def main : IO Unit := do
   --     errors := errors.push ex.toString
   --     importModules sheet.header.imports.toList {}
   let tests ← gradeSubmission sheetName sheet submissionEnv
-  let results : GradingResults := { tests, output, output_format := "text" }
+  let results : GradingResults := { tests, output, output_format := "ansi" }
   IO.FS.writeFile "../results/results.json" (toJson results).pretty
   -- if errors.size == 0 then
   --   IO.FS.writeFile "../results/results.json" (toJson results).pretty
