@@ -215,7 +215,7 @@ def main : IO Unit := do
     then "Warning: Your submission contains one or more errors, which are "
           ++ "listed below. You should attempt to correct these errors prior "
           ++ "to your final submission. Any responses with errors will be "
-          ++ "treated by the autograder as containing \"sorry.\""
+          ++ "treated by the autograder as containing \"sorry.\"\n"
           ++ (← getErrorsStr messages)
     else ""
   
