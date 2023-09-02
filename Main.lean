@@ -219,9 +219,10 @@ def main : IO Unit := do
           ++ (← getErrorsStr messages)
     else ""
   
-  -- Debug
+  -- Provide debug info for staff
+  IO.println "Submission compilation output:\n"
   let os ← messages.toList.mapM (λ m => m.toString)
-  IO.println os
+  IO.println <| os.foldl (·++·) ""
 
   -- FIXME: not working
   -- let submissionBuildDir : FilePath := "build" / "submission"
