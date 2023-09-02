@@ -108,7 +108,7 @@ def moveFilesIntoPlace : IO (String × String) := do
     IO.FS.writeFile submissionFileName (← IO.FS.readFile leanFile.path)
     let output :=
       if leanFiles.size > 1
-      then "Warning: you submitted multiple Lean files. The autograder expects "
+      then "Warning: You submitted multiple Lean files. The autograder expects "
         ++ "you to submit a single Lean file with your solutions and will only "
         ++ s!"grade a single file. It has picked {leanFile.fileName} to grade; "
         ++ "this may not be the file you intended to be graded.\n\n"
