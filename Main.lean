@@ -9,6 +9,7 @@ def solutionDirName := "AutograderTests"
 def solutionModuleName := "Solution"
 def submissionFileName := "Assignment.lean"
 def submissionUploadDir : FilePath := "/autograder/submission"
+def resultsJsonPath : FilePath := ".." / "results" / "results.json"
 
 -- Used for non-exercise-specific results (e.g., global failures)
 structure FailureResult where
@@ -51,14 +52,30 @@ def usedAxiomsAreValid (submissionAxioms : List Name) : Bool :=
   | [] => true
   | x :: xs => if validAxioms.contains x then usedAxiomsAreValid xs else false
 
+-- Ideally, we could format our Gradescope output nicely as HTML and escape
+-- inserted file names/error messages/etc. Unfortunately, Gradescope doesn't
+-- handle pre-escaped HTML well (it tries to re-escape it), so until a
+-- workaround for that issue is found, we'll stick with plain text.
 def escapeHtml (s : String) :=
   [("<", "&lt;"), (">", "&gt;"), ("&", "&amp;"), ("\"", "&quot;")].foldl
     (λ acc (char, repl) => acc.replace char repl) s
 
+-- Throw error and show it to the student, optionally providing additional
+-- information for the instructor only
+def exitWithError (errMsg : String) (instructorInfo: String := "")
+  : IO Unit := do
+  let result : FailureResult := {output := errMsg}
+  IO.FS.writeFile resultsJsonPath (toJson result).pretty
+  throw <| IO.userError (errMsg ++ "\n" ++ instructorInfo)
+
 def gradeSubmission (sheetName : Name) (sheet submission : Environment)
   : IO (Array ExerciseResult) := do
   let some sheetMod := sheet.moduleDataOf? sheetName
-    | throw <| IO.userError s!"module name {sheetName} not found"
+    | exitWithError ("The autograder failed to proces the assignment handout. "
+                      ++ "This is unexpected. Please notify your instructor "
+                      ++ "and provide them with a link to this submission.")
+                    s!"Sheet module with name {sheetName} not found"
+      pure #[]
   let mut results := #[]
 
   for name in sheetMod.constNames, constInfo in sheetMod.constants do
@@ -102,17 +119,11 @@ def gradeSubmission (sheetName : Name) (sheet submission : Environment)
   -- Gradescope will not accept an empty tests list, and this most likely
   -- indicates a misconfiguration anyway
   if results.size == 0 then
-    throw <| IO.userError <|
-      "There are no exercises annotated with points in the template, so the "
-        ++ "submission can't be graded."
+    exitWithError <| "The autograder is unable to grade your submission "
+        ++ "because no exercises have been marked as graded by your "
+        ++ "instructor. Please notify your instructor of this error and "
+        ++ "provide them with a link to this submission."
   return results
-
--- Throw error and show it to the student
-def exitWithError (errMsg : String) : IO Unit := do
-  let resultsPath : FilePath := ".." / "results" / "results.json"
-  let result : FailureResult := {output := errMsg}
-  IO.FS.writeFile resultsPath (toJson result).pretty
-  throw <| IO.userError errMsg
 
 -- Returns a tuple of (fileName, outputMessage)
 def moveFilesIntoPlace : IO (String × String) := do
@@ -145,14 +156,22 @@ def moveFilesIntoPlace : IO (String × String) := do
 def getTemplateFromGitHub : IO Unit := do
   -- Read JSON config
   let configRaw ← IO.FS.readFile (agPkgPathPrefix / "autograder_config.json")
-  let config ← IO.ofExcept <| Json.parse configRaw
+  let studentErrorText :=
+    "The autograder failed to run because it is incorrectly configured. Please "
+      ++ "notify your instructor of this error and provide them with a link to "
+      ++ "your submission."
+  let config ←
+    try
+      IO.ofExcept <| Json.parse configRaw
+    catch _ =>
+      exitWithError studentErrorText "Invalid JSON in autograder.json"
+      pure Json.null
   let templateFile : FilePath :=
     agPkgPathPrefix / solutionDirName / s!"{solutionModuleName}.lean"
   if ← templateFile.pathExists then FS.removeFile templateFile
   let repoURLPath ← IO.ofExcept <| config.getObjValAs? String "public_repo"
   let some repoName := (repoURLPath.splitOn "/").getLast? 
-    | throw <|
-      IO.userError "Invalid public_repo found in autograder_config.json"
+    | exitWithError studentErrorText "Invalid public_repo in autograder.json"
   
   -- Download the repo
   let repoLocalPath : FilePath := agPkgPathPrefix / repoName
@@ -162,7 +181,11 @@ def getTemplateFromGitHub : IO Unit := do
               repoLocalPath.toString]
   }
   if out.exitCode != 0 then
-    throw <| IO.userError s!"Failed to download public repo from GitHub"
+    exitWithError <|
+      "The autograder failed to run due to an issue retrieving the assignment. "
+        ++ "Try resubmitting in a few minutes. If the problem persists, "
+        ++ "contact your instructor and provide them with a link to this "
+        ++ "submission."
   
   -- Move the assignment to the correct location; delete the cloned repo
   let assignmentPath ← IO.ofExcept <|
@@ -237,4 +260,4 @@ def main : IO Unit := do
 
   let tests ← gradeSubmission sheetName sheet submissionEnv
   let results : GradingResults := { tests, output }
-  IO.FS.writeFile "../results/results.json" (toJson results).pretty
+  IO.FS.writeFile resultsJsonPath (toJson results).pretty
