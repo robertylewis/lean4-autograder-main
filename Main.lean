@@ -1,6 +1,7 @@
 import Lean
 import AutograderLib
--- import Mathlib -- ensures Mathlib is compiled when the container is being uploaded
+-- Ensures Mathlib is compiled when the container is being uploaded:
+-- import Mathlib
 open Lean IO System Elab Command
 
 def agPkgPathPrefix : FilePath := "lake-packages" / "autograder"
@@ -29,16 +30,21 @@ structure GradingResults where
   output_format: String := "text"
   deriving ToJson
 
-def Lean.Environment.moduleDataOf? (module : Name) (env : Environment) : Option ModuleData := do
+def Lean.Environment.moduleDataOf? (module : Name) (env : Environment)
+  : Option ModuleData := do
   let modIdx : Nat ← env.getModuleIdx? module
   env.header.moduleData[modIdx]?
 
-def Lean.Environment.moduleOfDecl? (decl : Name) (env : Environment) : Option Name := do
+def Lean.Environment.moduleOfDecl? (decl : Name) (env : Environment)
+  : Option Name := do
   let modIdx : Nat ← env.getModuleIdxFor? decl
   env.header.moduleNames[modIdx]?
 
 def validAxioms : Array Name :=
-  #["Classical.choice".toName, "Quot.sound".toName, "propext".toName, "funext".toName] 
+  #["Classical.choice".toName,
+    "Quot.sound".toName,
+    "propext".toName,
+    "funext".toName] 
 
 def usedAxiomsAreValid (submissionAxioms : List Name) : Bool := 
   match submissionAxioms with 
@@ -49,7 +55,8 @@ def escapeHtml (s : String) :=
   [("<", "&lt;"), (">", "&gt;"), ("&", "&amp;"), ("\"", "&quot;")].foldl
     (λ acc (char, repl) => acc.replace char repl) s
 
-def gradeSubmission (sheetName : Name) (sheet submission : Environment) : IO (Array ExerciseResult) := do
+def gradeSubmission (sheetName : Name) (sheet submission : Environment)
+  : IO (Array ExerciseResult) := do
   let some sheetMod := sheet.moduleDataOf? sheetName
     | throw <| IO.userError s!"module name {sheetName} not found"
   let mut results := #[]
@@ -62,25 +69,41 @@ def gradeSubmission (sheetName : Name) (sheet submission : Environment) : IO (Ar
         -- exercise to be filled in
         if let some subConstInfo := submission.find? name then
           if subConstInfo.value?.any (·.hasSorry) then
-            pure { name, status := "failed", output := "Proof contains sorry", score := 0.0 }
+            pure { name,
+                   status := "failed",
+                   output := "Proof contains sorry",
+                   score := 0.0 }
           else
             if not (constInfo.type == subConstInfo.type) then
-              pure { name, status := "failed", output := "Type is different than expected", score := 0.0 }
+              pure { name,
+                     status := "failed",
+                     output := "Type is different than expected",
+                     score := 0.0 }
             else
-              let (_, submissionState) := ((CollectAxioms.collect name).run submission).run {}
+              let (_, submissionState) :=
+                ((CollectAxioms.collect name).run submission).run {}
               if usedAxiomsAreValid submissionState.axioms.toList 
-                then pure { name, status := "passed", score := pts, output := "Passed all tests" }
+                then pure { name,
+                            status := "passed",
+                            score := pts,
+                            output := "Passed all tests" }
               else 
-                pure { name, status := "failed", output := "Contains unexpected axioms", score := 0.0 }
+                pure { name,
+                       status := "failed",
+                       output := "Contains unexpected axioms",
+                       score := 0.0 }
         else
-          pure { name, status := "failed", output := "Declaration not found in submission", score := 0.0 }
+          pure { name,
+                 status := "failed",
+                 output := "Declaration not found in submission",
+                 score := 0.0 }
       results := results.push result
 
   -- Gradescope will not accept an empty tests list, and this most likely
   -- indicates a misconfiguration anyway
   if results.size == 0 then
     throw <| IO.userError <|
-      "There are no exercises annotated with points in the template; thus, the "
+      "There are no exercises annotated with points in the template, so the "
         ++ "submission can't be graded."
   return results
 
@@ -91,7 +114,6 @@ def exitWithError (errMsg : String) : IO Unit := do
   IO.FS.writeFile resultsPath (toJson result).pretty
   throw <| IO.userError errMsg
 
--- TODO: should we warn if more than one Lean file submitted?
 -- Returns a tuple of (fileName, outputMessage)
 def moveFilesIntoPlace : IO (String × String) := do
   -- Copy the assignment's config file to the autograder directory
@@ -123,29 +145,33 @@ def moveFilesIntoPlace : IO (String × String) := do
 def getTemplateFromGitHub : IO Unit := do
   -- Read JSON config
   let configRaw ← IO.FS.readFile (agPkgPathPrefix / "autograder_config.json")
-  let config ← IO.ofExcept $ Json.parse configRaw
-  let templateFile : FilePath := agPkgPathPrefix / solutionDirName / s!"{solutionModuleName}.lean"
+  let config ← IO.ofExcept <| Json.parse configRaw
+  let templateFile : FilePath :=
+    agPkgPathPrefix / solutionDirName / s!"{solutionModuleName}.lean"
   if ← templateFile.pathExists then FS.removeFile templateFile
-  let repoURLPath ← IO.ofExcept $ config.getObjValAs? String "public_repo"
+  let repoURLPath ← IO.ofExcept <| config.getObjValAs? String "public_repo"
   let some repoName := (repoURLPath.splitOn "/").getLast? 
-    | throw <| IO.userError s!"Invalid public_repo found in autograder_config.json"
+    | throw <|
+      IO.userError "Invalid public_repo found in autograder_config.json"
   
   -- Download the repo
   let repoLocalPath : FilePath := agPkgPathPrefix / repoName
   let out ← IO.Process.output {
     cmd := "git"
-    args := #["clone", s!"https://github.com/{repoURLPath}", repoLocalPath.toString]
+    args := #["clone", s!"https://github.com/{repoURLPath}",
+              repoLocalPath.toString]
   }
   if out.exitCode != 0 then
     throw <| IO.userError s!"Failed to download public repo from GitHub"
   
   -- Move the assignment to the correct location; delete the cloned repo
-  let assignmentPath ← IO.ofExcept $ config.getObjValAs? String "assignment_path"
+  let assignmentPath ← IO.ofExcept <|
+    config.getObjValAs? String "assignment_path"
   let curAsgnFilePath : FilePath := agPkgPathPrefix / repoName / assignmentPath
   IO.FS.rename curAsgnFilePath templateFile
   IO.FS.removeDirAll repoLocalPath
 
-def checkAutograderCompiles : IO Unit := do
+def compileAutograder : IO Unit := do
   -- Check that the template compiles sans student submission
   let compileArgs : Process.SpawnArgs := {
     cmd := "/root/.elan/bin/lake"
@@ -153,18 +179,10 @@ def checkAutograderCompiles : IO Unit := do
   }
   let out ← IO.Process.output compileArgs
   if out.exitCode != 0 then
-    exitWithError $
+    exitWithError <|
       "The autograder failed to compile itself. This is unexpected. Please let "
-        ++ "your instructor know and provide a link to this Gradescope submission."
-  
-  -- Compile with the student submission
-  -- let studentAsgnPath : FilePath := agPkgPathPrefix / solutionDirName / submissionName
-  -- IO.FS.writeFile studentAsgnPath (← IO.FS.readFile submissionName)
-  -- let out ← IO.Process.output compileArgs
-  -- if out.exitCode != 0 then
-  --   exitWithError $
-  --     "Your file failed to compile. There must be some red error messages "
-  --       ++ "remaining in it. Fix these, and submit again!"
+        ++ "your instructor know and provide a link to this Gradescope "
+        ++ "submission."
 
 def getErrorsStr (ml : MessageLog) : IO String := do
   let errorMsgs := ml.msgs.filter (λ m => m.severity == .error)
@@ -176,17 +194,17 @@ def main : IO Unit := do
   -- Get files into their appropriate locations
   let (studentFileName, output) ← moveFilesIntoPlace
   getTemplateFromGitHub
-  checkAutograderCompiles
+  compileAutograder
 
-  -- Grade
+  -- Import the template (as a module, since it is known to compile)
   let sheetName := s!"{solutionDirName}.{solutionModuleName}".toName
   searchPathRef.set (← addSearchPathFromEnv {})
   let sheet ← importModules [{module := sheetName}] {}
 
-  -- let (submissionEnv, output) ← process (← IO.FS.readFile submissionFileName) (← mkEmptyEnvironment) {}
-  
+  -- Grade the student submission
   -- Source: https://github.com/adamtopaz/lean_grader/blob/master/Main.lean
-  let inputCtx := Parser.mkInputContext (← IO.FS.readFile submissionFileName) studentFileName
+  let submissionContents ← IO.FS.readFile submissionFileName
+  let inputCtx := Parser.mkInputContext submissionContents studentFileName
   let (header, parserState, messages) ← Parser.parseHeader inputCtx
   let (headerEnv, messages) ← processHeader header {} messages inputCtx
 
@@ -194,22 +212,15 @@ def main : IO Unit := do
     exitWithError <|
       "Your Lean file could not be processed because its header contains "
       ++ "errors. This is likely because you are attempting to import a module "
-      ++ "that does not exist. Please correct these errors and resubmit. A log "
-      ++ "of the encountered errors is provided below:\n\n"
+      ++ "that does not exist. A log of these errors is provided below; please "
+      ++ "correct them and resubmit:\n\n"
       ++ (← getErrorsStr messages)
 
-  -- TODO: is there any way the header could have errors and the body could
-  -- still compile? If not, we should just error here and tell the student their
-  -- file is broken so they don't get a bunch of confusing error messages later
-  -- on.
   let cmdState : Command.State := Command.mkState headerEnv messages {}
   let frontEndState ← IO.processCommands inputCtx parserState cmdState
   let messages := frontEndState.commandState.messages
   let submissionEnv := frontEndState.commandState.env
 
-  -- TODO: Gradescope won't render escaped characters properly
-  -- If can't figure this out, switch the output_format back to "text" and live
-  -- with the ugliness
   let output := output ++
     if messages.hasErrors
     then "Warning: Your submission contains one or more errors, which are "
@@ -224,38 +235,6 @@ def main : IO Unit := do
   let os ← messages.toList.mapM (λ m => m.toString)
   IO.println <| os.foldl (·++·) ""
 
-  -- FIXME: not working
-  -- let submissionBuildDir : FilePath := "build" / "submission"
-  -- FS.createDirAll submissionBuildDir
-  -- let submissionOlean := submissionBuildDir / "Submission.olean"
-  -- if ← submissionOlean.pathExists then FS.removeFile submissionOlean
-  -- let mut errors := #[]
-  -- let submissionEnv ←
-  --   try
-  --     let out ← IO.Process.output {
-  --       cmd := "lean"
-  --       args := #[submissionFileName, "-o", submissionOlean.toString]
-  --     }
-  --     if out.exitCode != 0 then
-  --       let result : ExerciseResult := {
-  --           name := submissionFileName,
-  --           status := "failed",
-  --           output := out.stderr,
-  --           score := 0.0
-  --       }
-  --       let results : GradingResults := { tests := #[result] }
-  --       IO.FS.writeFile "../results/results.json" (toJson results).pretty
-  --       throw <| IO.userError s!"Lean exited with code {out.exitCode}:\n{out.stderr}"
-  --     searchPathRef.modify fun sp => submissionBuildDir :: sp
-  --     -- Is `importModules` silently failing? If so, it might be because the
-  --     -- autograder has not been allocated enough resources on Gradescope!
-  --     -- TODO: look into replacing with `process`
-  --     -- importModules [{module := `Submission}] {}
-  --   catch ex =>
-  --     errors := errors.push ex.toString
-  --     importModules sheet.header.imports.toList {}
   let tests ← gradeSubmission sheetName sheet submissionEnv
   let results : GradingResults := { tests, output }
   IO.FS.writeFile "../results/results.json" (toJson results).pretty
-  -- if errors.size == 0 then
-  --   IO.FS.writeFile "../results/results.json" (toJson results).pretty
