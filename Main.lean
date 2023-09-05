@@ -138,8 +138,9 @@ def moveFilesIntoPlace : IO (String × String) := do
   let leanFiles := submittedFiles.filter
     (λ f => f.path.extension == some "lean")
   let some leanFile := leanFiles.get? (i := 0)
-    | exitWithError <| "No Lean file was found in your submission. Make sure to "
-        ++ "upload a single .lean file containing your solutions."
+    | exitWithError <| "Your submission was not graded because it did not "
+        ++ "contain a Lean file. Make sure to upload a single .lean file "
+        ++ "containing your solutions."
   IO.FS.writeFile submissionFileName (← IO.FS.readFile leanFile.path)
   let output :=
     if leanFiles.size > 1
