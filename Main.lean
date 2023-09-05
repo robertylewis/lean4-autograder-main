@@ -256,7 +256,7 @@ def main : IO Unit := do
     else ""
   
   -- Provide debug info for staff
-  IO.println "Submission compilation output:\n"
+  IO.println "Submission compilation output:"
   let os ← messages.toList.mapM (λ m => m.toString)
   IO.println <| os.foldl (·++·) ""
 
