@@ -4,12 +4,14 @@ import AutograderLib
 -- import Mathlib
 open Lean IO System Elab Command
 
+-- Don't change these
 def agPkgPathPrefix : FilePath := "lake-packages" / "autograder"
 def solutionDirName := "AutograderTests"
-def solutionModuleName := "Solution"
-def submissionFileName := "Assignment.lean"
 def submissionUploadDir : FilePath := "/autograder/submission"
 def resultsJsonPath : FilePath := ".." / "results" / "results.json"
+-- These are arbitrary
+def solutionModuleName := "Solution"
+def submissionFileName := "Assignment.lean"
 
 -- Used for non-exercise-specific results (e.g., global failures)
 structure FailureResult where
