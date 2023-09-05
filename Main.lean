@@ -135,11 +135,9 @@ def moveFilesIntoPlace : IO (String × String) := do
   -- Copy the student's submission to the autograder directory. They should only
   -- have uploaded one Lean file; if they submitted more, we pick the first
   let submittedFiles ← submissionUploadDir.readDir
-  IO.println (submittedFiles.map λ f => f.path.extension)
   let leanFiles := submittedFiles.filter
     (λ f => f.path.extension == some "lean")
-  IO.println s!"Lean files: {leanFiles.map λ f => f.path}"
-  let some leanFile := submittedFiles.get? (i := 0)
+  let some leanFile := leanFiles.get? (i := 0)
     | exitWithError <| "No Lean file was found in your submission. Make sure to "
         ++ "upload a single .lean file containing your solutions."
   IO.FS.writeFile submissionFileName (← IO.FS.readFile leanFile.path)
