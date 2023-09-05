@@ -64,8 +64,8 @@ def escapeHtml (s : String) :=
 
 -- Throw error and show it to the student, optionally providing additional
 -- information for the instructor only
-def exitWithError (errMsg : String) (instructorInfo: String := "")
-  : IO Unit := do
+def exitWithError {α} (errMsg : String) (instructorInfo: String := "")
+  : IO α := do
   let result : FailureResult := {output := errMsg}
   IO.FS.writeFile resultsJsonPath (toJson result).pretty
   throw <| IO.userError (errMsg ++ "\n" ++ instructorInfo)
@@ -77,7 +77,6 @@ def gradeSubmission (sheetName : Name) (sheet submission : Environment)
                       ++ "This is unexpected. Please notify your instructor "
                       ++ "and provide them with a link to this submission.")
                     s!"Sheet module with name {sheetName} not found"
-      pure #[]
   let mut results := #[]
 
   for name in sheetMod.constNames, constInfo in sheetMod.constants do
@@ -138,22 +137,18 @@ def moveFilesIntoPlace : IO (String × String) := do
   let submittedFiles ← submissionUploadDir.readDir
   let leanFiles := submittedFiles.filter
     (λ f => f.path.extension == some "lean")
-  let leanFile? := submittedFiles.get? (i := 0)
-  if let some leanFile := leanFile? then
-    IO.FS.writeFile submissionFileName (← IO.FS.readFile leanFile.path)
-    let output :=
-      if leanFiles.size > 1
-      then "Warning: You submitted multiple Lean files. The autograder expects "
-        ++ "you to submit a single Lean file containing your solutions, and it "
-        ++ s!"will only grade a single file. It has picked {leanFile.fileName} "
-        ++ "to grade; this may not be the file you intended to be graded.\n\n"
-      else ""
-    pure (leanFile.fileName, output)
-  else
-    exitWithError <| "No Lean file was found in your submission. Make sure to "
+  let some leanFile := submittedFiles.get? (i := 0)
+    | exitWithError <| "No Lean file was found in your submission. Make sure to "
         ++ "upload a single .lean file containing your solutions."
-    pure ("", "") 
-  
+  IO.FS.writeFile submissionFileName (← IO.FS.readFile leanFile.path)
+  let output :=
+    if leanFiles.size > 1
+    then "Warning: You submitted multiple Lean files. The autograder expects "
+      ++ "you to submit a single Lean file containing your solutions, and it "
+      ++ s!"will only grade a single file. It has picked {leanFile.fileName} "
+      ++ "to grade; this may not be the file you intended to be graded.\n\n"
+    else ""
+  pure (leanFile.fileName, output)
 
 def getTemplateFromGitHub : IO Unit := do
   -- Read JSON config
@@ -167,7 +162,6 @@ def getTemplateFromGitHub : IO Unit := do
       IO.ofExcept <| Json.parse configRaw
     catch _ =>
       exitWithError studentErrorText "Invalid JSON in autograder.json"
-      pure Json.null
   let templateFile : FilePath :=
     agPkgPathPrefix / solutionDirName / s!"{solutionModuleName}.lean"
   if ← templateFile.pathExists then FS.removeFile templateFile
