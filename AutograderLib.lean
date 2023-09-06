@@ -9,18 +9,23 @@ syntax num : ptVal
 syntax scientific : ptVal
 syntax "point" : ptWord
 syntax "points" : ptWord
-syntax (name := problem) ptVal ptWord : attr
+-- syntax (name := problem) ptVal ptWord : attr
+syntax (name := problem) "autograded" ptVal : attr
 
 initialize problemAttr : ParametricAttribute Float ←
   registerParametricAttribute {
     name := `problem
     descr := "Specifies the point value of a problem"
     getParam := λ _ stx => match stx with
-      | `(attr| $pts:scientific point) | `(attr| $pts:scientific points) => 
+      | `(attr| autograded $pts:num) => return pts.getNat.toFloat
+      | `(attr| autograded $pts:scientific) =>
         let (n, s, d) := pts.getScientific
         return Float.ofScientific n s d
-      | `(attr| $pts:num point) | `(attr| $pts:num points) =>
-        return pts.getNat.toFloat
+      -- | `(attr| $pts:scientific point) | `(attr| $pts:scientific points) => 
+      --   let (n, s, d) := pts.getScientific
+      --   return Float.ofScientific n s d
+      -- | `(attr| $pts:num point) | `(attr| $pts:num points) =>
+      --   return pts.getNat.toFloat
       | _  => throwError "Invalid problem attribute"
     afterSet := λ _ _ => do pure ()
   }
