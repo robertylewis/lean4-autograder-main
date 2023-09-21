@@ -210,7 +210,7 @@ def getErrorsStr (ml : MessageLog) : IO String := do
   let errorTxt := errors.foldl (λ acc e => acc ++ "\n" ++ e) ""
   return errorTxt
 
-def main : IO Unit := do
+unsafe def main : IO Unit := do
   -- Get files into their appropriate locations
   let (studentFileName, output) ← moveFilesIntoPlace
   getTemplateFromGitHub
@@ -226,6 +226,10 @@ def main : IO Unit := do
   let submissionContents ← IO.FS.readFile submissionFileName
   let inputCtx := Parser.mkInputContext submissionContents studentFileName
   let (header, parserState, messages) ← Parser.parseHeader inputCtx
+  
+  enableInitializersExecution
+  initSearchPath (← findSysroot)
+
   let (headerEnv, messages) ← processHeader header {} messages inputCtx
 
   if messages.hasErrors then
