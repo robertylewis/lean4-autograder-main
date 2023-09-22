@@ -49,13 +49,20 @@ def validAxioms : Array Name :=
     "propext".toName,
     "funext".toName] 
 
-def containsInvalidAxiom (submissionAxioms : List Name) (sheetEnv : Environment)   
-    : Option Name := do
+def containsInvalidAxiom (submissionAxioms : List Name)
+                         (sheet submission : Environment) : Option Name := do
   for ax in submissionAxioms do
+    let isBaseAxiom := validAxioms.contains ax
+    let isTaggedAxiom := legalAxiomAttr.hasTag sheet ax
+    -- If it's a tagged axiom, make sure they haven't changed the type
+    let isTaggedTypeCorrect :=
+      match (sheet.find? ax, submission.find? ax) with
+        | (some sheetConst, some subConst) => sheetConst.type == subConst.type
+        | _                                => false
+        
     -- If the axiom is not one of our predefined acceptable axioms, and is
     -- also not tagged in the stencil as legal, then it's invalid
-    if (! (validAxioms.contains ax)) &&
-       (! (legalAxiomAttr.hasTag sheetEnv ax)) then
+    if ! isBaseAxiom && ! (isTaggedAxiom && isTaggedTypeCorrect) then
       return ax
   none
 
@@ -106,7 +113,7 @@ def gradeSubmission (sheetName : Name) (sheet submission : Environment)
               let (_, submissionState) :=
                 ((CollectAxioms.collect name).run submission).run {}
               if let some badAx :=
-                  containsInvalidAxiom submissionState.axioms.toList sheet
+                  containsInvalidAxiom submissionState.axioms.toList sheet submission
                 then pure { name,
                             status := "failed",
                             output := s!"Uses unexpected axiom {badAx}",
