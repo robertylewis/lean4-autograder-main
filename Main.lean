@@ -91,6 +91,8 @@ def exitWithError {α} (errMsg : String) (instructorInfo: String := "")
 
 def gradeSubmission (sheet submission : Environment)
   : IO (Array ExerciseResult) := do
+  IO.println s!"Modules: {sheet.allImportedModuleNames}"
+  IO.println s!"Main Module: {sheet.mainModule}"
   let some sheetMod := sheet.moduleDataOf? sheetModuleName
     | exitWithError ("The autograder failed to proces the assignment handout. "
                       ++ "This is unexpected. Please notify your instructor "
