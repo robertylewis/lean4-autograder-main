@@ -93,6 +93,7 @@ def gradeSubmission (sheet submission : Environment)
   : IO (Array ExerciseResult) := do
   IO.println s!"Modules: {sheet.allImportedModuleNames}"
   IO.println s!"Main Module: {sheet.mainModule}"
+  IO.println sheet.constants.toList.length
   let some sheetMod := sheet.moduleDataOf? sheetModuleName
     | exitWithError ("The autograder failed to proces the assignment handout. "
                       ++ "This is unexpected. Please notify your instructor "
