@@ -13,6 +13,12 @@ def resultsJsonPath : FilePath := ".." / "results" / "results.json"
 def solutionModuleName := "Solution"
 def submissionFileName := "Assignment.lean"
 
+-- These are generated based on the above
+def sheetModuleName := s!"{solutionDirName}.{solutionModuleName}".toName
+def sheetFileName := s!"{solutionModuleName}.lean"
+def sheetFile : FilePath :=
+  agPkgPathPrefix / solutionDirName / sheetFileName
+
 -- Used for non-exercise-specific results (e.g., global failures)
 structure FailureResult where
   output : String
@@ -83,13 +89,13 @@ def exitWithError {α} (errMsg : String) (instructorInfo: String := "")
   IO.FS.writeFile resultsJsonPath (toJson result).pretty
   throw <| IO.userError (errMsg ++ "\n" ++ instructorInfo)
 
-def gradeSubmission (sheetName : Name) (sheet submission : Environment)
+def gradeSubmission (sheet submission : Environment)
   : IO (Array ExerciseResult) := do
-  let some sheetMod := sheet.moduleDataOf? sheetName
+  let some sheetMod := sheet.moduleDataOf? sheetModuleName
     | exitWithError ("The autograder failed to proces the assignment handout. "
                       ++ "This is unexpected. Please notify your instructor "
                       ++ "and provide them with a link to this submission.")
-                    s!"Sheet module with name {sheetName} not found"
+                    s!"Sheet module with name {sheetModuleName} not found"
   let mut results := #[]
 
   for name in sheetMod.constNames, constInfo in sheetMod.constants do
@@ -177,9 +183,7 @@ def getTemplateFromGitHub : IO Unit := do
       IO.ofExcept <| Json.parse configRaw
     catch _ =>
       exitWithError studentErrorText "Invalid JSON in autograder.json"
-  let templateFile : FilePath :=
-    agPkgPathPrefix / solutionDirName / s!"{solutionModuleName}.lean"
-  if ← templateFile.pathExists then FS.removeFile templateFile
+  if ← sheetFile.pathExists then FS.removeFile sheetFile
   let repoURLPath ← IO.ofExcept <| config.getObjValAs? String "public_repo"
   let some repoName := (repoURLPath.splitOn "/").getLast? 
     | exitWithError studentErrorText "Invalid public_repo in autograder.json"
@@ -202,7 +206,7 @@ def getTemplateFromGitHub : IO Unit := do
   let assignmentPath ← IO.ofExcept <|
     config.getObjValAs? String "assignment_path"
   let curAsgnFilePath : FilePath := agPkgPathPrefix / repoName / assignmentPath
-  IO.FS.rename curAsgnFilePath templateFile
+  IO.FS.rename curAsgnFilePath sheetFile
   IO.FS.removeDirAll repoLocalPath
 
 def compileAutograder : IO Unit := do
@@ -231,18 +235,38 @@ unsafe def main : IO Unit := do
   compileAutograder
 
   -- Import the template (as a module, since it is known to compile)
-  let sheetName := s!"{solutionDirName}.{solutionModuleName}".toName
-  searchPathRef.set (← addSearchPathFromEnv {})
-  let sheet ← importModules [{module := sheetName}] {}
+  -- let sheetName := s!"{solutionDirName}.{solutionModuleName}".toName
+  -- searchPathRef.set (← addSearchPathFromEnv {})
+  -- let sheet ← importModules [{module := sheetName}] {}
+
+  -- Import the sheet (i.e., template/stencil)
+  let sheetContents ← IO.FS.readFile sheetFile
+  let sheetCtx := Parser.mkInputContext sheetContents sheetFileName
+  let (sheetHeader, sheetParState, sheetMsgs) ← Parser.parseHeader sheetCtx
+
+  enableInitializersExecution
+  initSearchPath (← findSysroot)
+
+  let (sheetHeadEnv, sheetMsgs)
+    ← processHeader sheetHeader {} sheetMsgs sheetCtx
+  
+  if sheetMsgs.hasErrors then
+    exitWithError (instructorInfo := (← getErrorsStr sheetMsgs)) <|
+      "There was an error processing the assignment template's imports. This "
+        ++ "error is unexpected. Please notify your instructor and provide a "
+        ++ "link to your submission."
+    
+  let sheetCmdState : Command.State := Command.mkState sheetHeadEnv sheetMsgs {}
+  let sheetFrontEndState
+    ← IO.processCommands sheetCtx sheetParState sheetCmdState
+  let sheet := sheetFrontEndState.commandState.env
+
 
   -- Grade the student submission
   -- Source: https://github.com/adamtopaz/lean_grader/blob/master/Main.lean
   let submissionContents ← IO.FS.readFile submissionFileName
   let inputCtx := Parser.mkInputContext submissionContents studentFileName
   let (header, parserState, messages) ← Parser.parseHeader inputCtx
-  
-  enableInitializersExecution
-  initSearchPath (← findSysroot)
 
   let (headerEnv, messages) ← processHeader header {} messages inputCtx
 
@@ -273,6 +297,6 @@ unsafe def main : IO Unit := do
   let os ← messages.toList.mapM (λ m => m.toString)
   IO.println <| os.foldl (·++·) ""
 
-  let tests ← gradeSubmission sheetName sheet submissionEnv
+  let tests ← gradeSubmission sheet submissionEnv
   let results : GradingResults := { tests, output }
   IO.FS.writeFile resultsJsonPath (toJson results).pretty
