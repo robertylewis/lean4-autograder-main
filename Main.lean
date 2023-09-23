@@ -92,6 +92,9 @@ def gradeSubmission (sheetName : Name) (sheet submission : Environment)
                     s!"Sheet module with name {sheetName} not found"
   let mut results := #[]
 
+  let sheetAxioms := sheetMod.constants.filter (λ | .axiomInfo _ => true | _ => false)
+  IO.println s!"{sheetAxioms.map λ a => a.name}"
+
   for name in sheetMod.constNames, constInfo in sheetMod.constants do
     -- Only consider annotated, non-internal declarations
     if let some pts := problemAttr.getParam? sheet name then
