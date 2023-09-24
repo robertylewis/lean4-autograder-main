@@ -92,11 +92,7 @@ def exitWithError {α} (errMsg : String) (instructorInfo: String := "")
 def gradeSubmission (sheet submission : Environment)
   : IO (Array ExerciseResult) := do
   -- TODO: figure this out
-  let ms := sheet.header.moduleData
-  |> (λ as => Array.mapIdx as Prod.mk)
-  |> Array.filter (λ (_, d) => Option.isSome <| d.constants.find? (λ c => c.name == `LoVe.BackwardProofs.DoubleNegation))
-  |> Array.map (λ (i, d) => (i, d.constNames))
-  IO.println s!"Module: {ms}"
+  IO.println s!"Module: {sheet.constants.toList.map (λ c => c.1)}"
   IO.println s!"Modules: {sheet.allImportedModuleNames}"
   IO.println s!"Module data: {sheet.header.moduleData.map λ d => if d.constNames.size < 100 then d.constNames else #[]}"
   IO.println s!"Main Module: {sheet.mainModule}"
