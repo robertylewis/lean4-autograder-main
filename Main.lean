@@ -91,7 +91,9 @@ def exitWithError {α} (errMsg : String) (instructorInfo: String := "")
 
 def gradeSubmission (sheet submission : Environment)
   : IO (Array ExerciseResult) := do
+  -- TODO: figure this out
   IO.println s!"Modules: {sheet.allImportedModuleNames}"
+  IO.println s!"Module data: {sheet.header.moduleData.map λ d => if d.constNames.size < 100 then d.constNames else #[]}"
   IO.println s!"Main Module: {sheet.mainModule}"
   IO.println sheet.constants.toList.length
   let some sheetMod := sheet.moduleDataOf? sheetModuleName
