@@ -206,17 +206,16 @@ def getTemplateFromGitHub : IO Unit := do
   IO.FS.removeDirAll repoLocalPath
 
 def compileAutograder : IO Unit := do
-  -- Check that the template compiles sans student submission
+  -- Compile the autograder so we get all our deps, even if the sheet itself
+  -- fails to compile
   let compileArgs : Process.SpawnArgs := {
     cmd := "/root/.elan/bin/lake"
     args := #["build", "autograder", solutionDirName]
   }
   let out ← IO.Process.output compileArgs
   if out.exitCode != 0 then
-    exitWithError <|
-      "The autograder failed to compile itself. This is unexpected. Please let "
-        ++ "your instructor know and provide a link to this Gradescope "
-        ++ "submission."
+    IO.println <| "WARNING: The autograder failed to compile. Note that " ++
+      "may not be an error if your assignment template contains errors."
 
 def getErrorsStr (ml : MessageLog) : IO String := do
   let errorMsgs := ml.msgs.filter (λ m => m.severity == .error)
