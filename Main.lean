@@ -49,10 +49,23 @@ def validAxioms : Array Name :=
     "propext".toName,
     "funext".toName] 
 
-def usedAxiomsAreValid (submissionAxioms : List Name) : Bool := 
-  match submissionAxioms with 
-  | [] => true
-  | x :: xs => if validAxioms.contains x then usedAxiomsAreValid xs else false
+def axiomHasCorrectType (ax : Name) (sheet submission : Environment) : Bool :=
+  match (sheet.find? ax, submission.find? ax) with
+    | (some sheetConst, some subConst) => sheetConst.type == subConst.type
+    | _                                => false
+
+def findInvalidAxiom (submissionAxioms : List Name)
+                     (sheet submission : Environment) : Option Name := do
+  for ax in submissionAxioms do
+    let isBaseAxiom := validAxioms.contains ax
+    let isTaggedAxiom := legalAxiomAttr.hasTag sheet ax
+    let isTypeCorrect := axiomHasCorrectType ax sheet submission
+        
+    -- If the axiom is not one of our predefined acceptable axioms, and is
+    -- also not tagged in the stencil as legal, then it's invalid
+    if ! (isBaseAxiom || isTaggedAxiom) || ! isTypeCorrect then
+      return ax
+  none
 
 -- Ideally, we could format our Gradescope output nicely as HTML and escape
 -- inserted file names/error messages/etc. Unfortunately, Gradescope doesn't
@@ -100,16 +113,17 @@ def gradeSubmission (sheetName : Name) (sheet submission : Environment)
             else
               let (_, submissionState) :=
                 ((CollectAxioms.collect name).run submission).run {}
-              if usedAxiomsAreValid submissionState.axioms.toList 
+              if let some badAx :=
+                findInvalidAxiom submissionState.axioms.toList sheet submission
                 then pure { name,
-                            status := "passed",
-                            score := pts,
-                            output := "Passed all tests" }
+                            status := "failed",
+                            output := s!"Uses unexpected axiom {badAx}",
+                            score := 0.0 }
               else 
                 pure { name,
-                       status := "failed",
-                       output := "Contains unexpected axioms",
-                       score := 0.0 }
+                       status := "passed",
+                       score := pts,
+                       output := "Passed all tests" }
         else
           pure { name,
                  status := "failed",
