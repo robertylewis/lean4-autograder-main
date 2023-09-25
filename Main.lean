@@ -227,7 +227,7 @@ unsafe def main : IO Unit := do
   -- Get files into their appropriate locations
   let (studentFileName, output) ← moveFilesIntoPlace
   getTemplateFromGitHub
-  -- compileAutograder
+  compileAutograder
 
   -- -- Import the template (as a module, since it is known to compile)
   -- let sheetName := s!"{solutionDirName}.{solutionModuleName}".toName
