@@ -92,6 +92,7 @@ def exitWithError {α} (errMsg : String) (instructorInfo: String := "")
 def gradeSubmission (sheet submission : Environment)
   : IO (Array ExerciseResult) := do
   -- TODO: figure this out
+  IO.println s!"Count Constants: {sheet.constants.size}}"
   IO.println s!"Module: {sheet.constants.toList.map (λ c => c.1)}"
   IO.println s!"Modules: {sheet.allImportedModuleNames}"
   IO.println s!"Module data: {sheet.header.moduleData.map λ d => if d.constNames.size < 100 then d.constNames else #[]}"
@@ -241,9 +242,10 @@ unsafe def main : IO Unit := do
   compileAutograder
 
   -- Import the template (as a module, since it is known to compile)
-  -- let sheetName := s!"{solutionDirName}.{solutionModuleName}".toName
-  -- searchPathRef.set (← addSearchPathFromEnv {})
-  -- let sheet ← importModules [{module := sheetName}] {}
+  let sheetName := s!"{solutionDirName}.{solutionModuleName}".toName
+  searchPathRef.set (← addSearchPathFromEnv {})
+  let sheet ← importModules [{module := sheetName}] {}
+  IO.println <| "Count Module: " ++ (λ | .none => "failed" | .some m => toString m.constants.size) (sheet.moduleDataOf? sheetModuleName )
 
   -- Import the sheet (i.e., template/stencil)
   let sheetContents ← IO.FS.readFile sheetFile
