@@ -112,7 +112,7 @@ def gradeSubmission (sheet submission : Environment)
                      status := "failed",
                      output := "Type is different from expected: "
                                 ++ s!"{constInfo.type} does not match "
-                                ++ "{subConstInfo.type}",
+                                ++ s!"{subConstInfo.type}",
                      score := 0.0 }
             else
               let (_, submissionState) :=
@@ -235,6 +235,7 @@ unsafe def main : IO Unit := do
   -- let sheetName := s!"{solutionDirName}.{solutionModuleName}".toName
   -- searchPathRef.set (← addSearchPathFromEnv {})
   -- let sheet ← importModules [{module := sheetName}] {}
+
   -- Import the sheet (i.e., template/stencil)
   let sheetContents ← IO.FS.readFile sheetFile
   let sheetCtx := Parser.mkInputContext sheetContents sheetFileName
