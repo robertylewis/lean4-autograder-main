@@ -100,6 +100,8 @@ def gradeSubmission (sheet submission : Environment)
     if not name.isInternal then
       let result ←
         -- exercise to be filled in
+        if let some (_, diffSCI) := submission.constants.toList.find? (·.1 = name) then
+          IO.println diffSCI.type
         if let some subConstInfo := submission.find? name then
           if subConstInfo.value?.any (·.hasSorry) then
             pure { name,
