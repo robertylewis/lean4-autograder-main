@@ -110,7 +110,9 @@ def gradeSubmission (sheet submission : Environment)
             if not (constInfo.type == subConstInfo.type) then
               pure { name,
                      status := "failed",
-                     output := "Type is different from expected",
+                     output := "Type is different from expected: "
+                                ++ s!"{constInfo.type} does not match "
+                                ++ "{subConstInfo.type}",
                      score := 0.0 }
             else
               let (_, submissionState) :=
