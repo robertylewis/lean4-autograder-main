@@ -212,7 +212,7 @@ def compileAutograder : IO Unit := do
   -- fails to compile
   let compileArgs : Process.SpawnArgs := {
     cmd := "/root/.elan/bin/lake"
-    args := #["build", "autograder", solutionDirName]
+    args := #["build", "autograder"]--, solutionDirName]
   }
   let out ← IO.Process.output compileArgs
   if out.exitCode != 0 then
