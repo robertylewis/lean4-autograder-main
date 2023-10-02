@@ -212,12 +212,14 @@ def compileAutograder : IO Unit := do
   -- fails to compile
   let compileArgs : Process.SpawnArgs := {
     cmd := "/root/.elan/bin/lake"
-    args := #["build", "autograder", "LoVe"]--, solutionDirName]
+    args := #["build", "autograder", solutionDirName]
   }
   let out ← IO.Process.output compileArgs
   if out.exitCode != 0 then
-    IO.println <| "WARNING: The autograder failed to compile. Note that " ++
-      "may not be an error if your assignment template contains errors."
+    IO.println <| "WARNING: The autograder failed to compile. Note that this "
+      ++ "may not be an error if your assignment template contains errors. "
+      ++ "Compilation errors are printed below:\n"
+      ++ out.stderr
 
 def getErrorsStr (ml : MessageLog) : IO String := do
   let errorMsgs := ml.msgs.filter (λ m => m.severity == .error)
