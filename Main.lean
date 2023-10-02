@@ -231,6 +231,9 @@ unsafe def main : IO Unit := do
   -- Get files into their appropriate locations
   let (studentFileName, output) ← moveFilesIntoPlace
   getTemplateFromGitHub
+  -- We need to compile the AutograderTests directory to ensure that any
+  -- libraries on which we depend get compiled (even if the sheet itself fails
+  -- to compile)
   compileAutograder
 
   -- -- Import the template (as a module, since it is known to compile)
