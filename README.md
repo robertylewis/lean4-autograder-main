@@ -9,6 +9,9 @@ To generate the files Gradescope needs, this project uses a repository on GitHub
 theorem th3 (h : ¬q → ¬p) : (p → q) := sorry
 ```
 
+The autograder would award 2 points for a `sorry`-free proof of `th3` that does not use any nonstandard axioms.
+Extra axioms can be allowed with the `@[legalAxiom]` attribute.
+
 It is **NOT** necessary to edit `autograder_config.json` unless you want to use the helper scripts.
 
 ### Gradescope Container Minimum Specifications
