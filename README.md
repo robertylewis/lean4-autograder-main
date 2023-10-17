@@ -5,7 +5,7 @@ This project provides a Lean 4 autograder that works with [Gradescope](https://g
 To generate the files Gradescope needs, this project uses a repository on GitHub that must contain a template of the assignment the students will receive. This project retrieves from the template how many points each exercise is worth. Thus, the template must follow the following pattern:
 
 ```lean
-/- 2 points -/
+@[autograded 2]
 theorem th3 (h : ¬q → ¬p) : (p → q) := sorry
 ```
 
@@ -19,26 +19,10 @@ This project is meant to work with MathLib assignments, so for a good Gradescope
 
 Add this project as a lake dependency to your course project. Then, set up the [autograder shell](https://github.com/robertylewis/lean4_autograder) for use with an assignment in that course project.
 
-
-## Old readme, for helper scripts
-
-Additionally, on *autograder_config.json*, please replace the following variables values:
-    
-- **private_repo** with the repo path you that contains your files.
-- **public_repo** with the name you wish to give to the public repo.
-- **assignment_path** with the path for the assignment available in the **public** repo.
-
-### Helper Scripts
-
-We provide a set of scripts that can help to maintain/create the autograder and repos. For using the python scripts, first install the requirements: `pip install -r requirements.txt`
-
-1. **PythonScripts/configure_public_repo.py** creates the public repo with the assignment template from a private repo containing the solutions. This script uses the GitHub API, in order to use it, please follow the following steps:
-
-    - Create a GitHub personal access token following the steps listed [here](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token#creating-a-personal-access-token-classic). Please select the **repo** scope.
-
-    - Replace **api_key** with the key generated above on the *api_config.json* file.
-
-2. **PythonScripts/get_template_from_github.py** retrieves the assignment template from GitHub and generates helper files that will be used by the autograder. This is meant to be used by the autograder itself on Gradescope. (Uses the data on *autograder_config.json*)
-
-3. **make_autograder.sh** generates the zip file to be uploaded to Gradescope. 
-
+For an example, see [fpv2023](https://github.com/BrownCS1951x/fpv2023). 
+The lakefile of this project imports this autograder project.
+To create a Gradescope assignment for HW1, I would edit the configuration file in the autograder shell 
+to point at `Homeworks/Homework1.lean` in that repository,
+run the `make_autograder.sh` script, 
+and upload the resulting zip file to Gradescope.
+Students would then submit *only* their `Homework1.lean` file to Gradescope.
