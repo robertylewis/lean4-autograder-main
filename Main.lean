@@ -53,7 +53,7 @@ def validAxioms : Array Name :=
   #["Classical.choice".toName,
     "Quot.sound".toName,
     "propext".toName,
-    "funext".toName] 
+    "funext".toName]
 
 def axiomHasCorrectType (ax : Name) (sheet submission : Environment) : Bool :=
   match (sheet.find? ax, submission.find? ax) with
@@ -66,7 +66,7 @@ def findInvalidAxiom (submissionAxioms : List Name)
     let isBaseAxiom := validAxioms.contains ax
     let isTaggedAxiom := legalAxiomAttr.hasTag sheet ax
     let isTypeCorrect := axiomHasCorrectType ax sheet submission
-        
+
     -- If the axiom is not one of our predefined acceptable axioms, and is
     -- also not tagged in the stencil as legal, then it's invalid
     if ! (isBaseAxiom || isTaggedAxiom) || ! isTypeCorrect then
@@ -101,33 +101,44 @@ def gradeSubmission (sheet submission : Environment)
       let result ←
         -- exercise to be filled in
         if let some subConstInfo := submission.find? name then
+          -- Gather axioms in submitted declaration
+          let (_, submissionState) :=
+                ((CollectAxioms.collect name).run submission).run {}
+          -- Tests:
+          -- * Ensure declaration doesn't use `sorry` (separate from other
+          --   axioms since it's especially common)
           if subConstInfo.value?.any (·.hasSorry) then
             pure { name,
                    status := "failed",
                    output := "Proof contains sorry",
                    score := 0.0 }
-          else
-            if not (constInfo.type == subConstInfo.type) then
+          -- * Ensure declaration type matches sheet
+          else if not (constInfo.type == subConstInfo.type) then
               pure { name,
                      status := "failed",
                      output := "Type is different from expected: "
                                 ++ s!"{constInfo.type} does not match "
                                 ++ s!"{subConstInfo.type}",
                      score := 0.0 }
-            else
-              let (_, submissionState) :=
-                ((CollectAxioms.collect name).run submission).run {}
-              if let some badAx :=
-                findInvalidAxiom submissionState.axioms.toList sheet submission
-                then pure { name,
-                            status := "failed",
-                            output := s!"Uses unexpected axiom {badAx}",
-                            score := 0.0 }
-              else 
-                pure { name,
-                       status := "passed",
-                       score := pts,
-                       output := "Passed all tests" }
+          -- * Submitted declaration must use only legal axioms
+          else if let some badAx :=
+            findInvalidAxiom submissionState.axioms.toList sheet submission
+          then
+            pure { name,
+                    status := "failed",
+                    output := s!"Uses unexpected axiom {badAx}",
+                    score := 0.0 }
+          -- * Submitted declaration must be sound
+          else if subConstInfo.isUnsafe || subConstInfo.isPartial then
+            pure { name,
+                    status := "failed",
+                    output := s!"Declaration is partial or unsafe",
+                    score := 0.0 }
+          else
+            pure { name,
+                    status := "passed",
+                    score := pts,
+                    output := "Passed all tests" }
         else
           pure { name,
                  status := "failed",
@@ -183,9 +194,9 @@ def getTemplateFromGitHub : IO Unit := do
       exitWithError studentErrorText "Invalid JSON in autograder.json"
   if ← sheetFile.pathExists then FS.removeFile sheetFile
   let repoURLPath ← IO.ofExcept <| config.getObjValAs? String "public_repo"
-  let some repoName := (repoURLPath.splitOn "/").getLast? 
+  let some repoName := (repoURLPath.splitOn "/").getLast?
     | exitWithError studentErrorText "Invalid public_repo in autograder.json"
-  
+
   -- Download the repo
   let repoLocalPath : FilePath := agPkgPathPrefix / repoName
   let out ← IO.Process.output {
@@ -199,7 +210,7 @@ def getTemplateFromGitHub : IO Unit := do
         ++ "Try resubmitting in a few minutes. If the problem persists, "
         ++ "contact your instructor and provide them with a link to this "
         ++ "submission."
-  
+
   -- Move the assignment to the correct location; delete the cloned repo
   let assignmentPath ← IO.ofExcept <|
     config.getObjValAs? String "assignment_path"
@@ -251,13 +262,13 @@ unsafe def main : IO Unit := do
 
   let (sheetHeadEnv, sheetMsgs)
     ← processHeader sheetHeader {} sheetMsgs sheetCtx
-  
+
   if sheetMsgs.hasErrors then
     exitWithError (instructorInfo := (← getErrorsStr sheetMsgs)) <|
       "There was an error processing the assignment template's imports. This "
         ++ "error is unexpected. Please notify your instructor and provide a "
         ++ "link to your submission."
-    
+
   let sheetCmdState : Command.State := Command.mkState sheetHeadEnv sheetMsgs {}
   let sheetFrontEndState
     ← IO.processCommands sheetCtx sheetParState sheetCmdState
@@ -293,7 +304,7 @@ unsafe def main : IO Unit := do
           ++ "treated by the autograder as containing \"sorry.\"\n"
           ++ (← getErrorsStr messages)
     else ""
-  
+
   -- Provide debug info for staff
   IO.println "Submission compilation output:"
   let os ← messages.toList.mapM (λ m => m.toString)
