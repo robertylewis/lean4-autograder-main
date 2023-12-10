@@ -128,8 +128,9 @@ def gradeSubmission (sheet submission : Environment)
                     status := "failed",
                     output := s!"Uses unexpected axiom {badAx}",
                     score := 0.0 }
-          -- * Submitted declaration must be sound
-          else if subConstInfo.isUnsafe || subConstInfo.isPartial then
+          -- * Submitted declaration must match the soundness of the sheet decl
+          else if (subConstInfo.isUnsafe && ! constInfo.isUnsafe) ||
+                  (subConstInfo.isPartial && ! constInfo.isPartial) then
             pure { name,
                     status := "failed",
                     output := s!"Declaration is partial or unsafe",
