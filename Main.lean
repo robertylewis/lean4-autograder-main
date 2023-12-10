@@ -133,7 +133,7 @@ def gradeSubmission (sheet submission : Environment)
                   (subConstInfo.isPartial && ! constInfo.isPartial) then
             pure { name,
                     status := "failed",
-                    output := s!"Declaration is partial or unsafe",
+                    output := "Declaration is partial or unsafe",
                     score := 0.0 }
           else
             pure { name,
