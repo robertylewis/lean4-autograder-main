@@ -101,33 +101,45 @@ def gradeSubmission (sheet submission : Environment)
       let result ←
         -- exercise to be filled in
         if let some subConstInfo := submission.find? name then
+          -- Gather axioms in submitted declaration
+          let (_, submissionState) :=
+                ((CollectAxioms.collect name).run submission).run {}
+          -- Tests:
+          -- * Ensure declaration doesn't use `sorry` (separate from other
+          --   axioms since it's especially common)
           if subConstInfo.value?.any (·.hasSorry) then
             pure { name,
                    status := "failed",
                    output := "Proof contains sorry",
                    score := 0.0 }
-          else
-            if not (constInfo.type == subConstInfo.type) then
+          -- * Ensure declaration type matches sheet
+          else if not (constInfo.type == subConstInfo.type) then
               pure { name,
                      status := "failed",
                      output := "Type is different from expected: "
                                 ++ s!"{constInfo.type} does not match "
                                 ++ s!"{subConstInfo.type}",
                      score := 0.0 }
-            else
-              let (_, submissionState) :=
-                ((CollectAxioms.collect name).run submission).run {}
-              if let some badAx :=
-                findInvalidAxiom submissionState.axioms.toList sheet submission
-                then pure { name,
-                            status := "failed",
-                            output := s!"Uses unexpected axiom {badAx}",
-                            score := 0.0 }
-              else
-                pure { name,
-                       status := "passed",
-                       score := pts,
-                       output := "Passed all tests" }
+          -- * Submitted declaration must use only legal axioms
+          else if let some badAx :=
+            findInvalidAxiom submissionState.axioms.toList sheet submission
+          then
+            pure { name,
+                    status := "failed",
+                    output := s!"Uses unexpected axiom {badAx}",
+                    score := 0.0 }
+          -- * Submitted declaration must match the soundness of the sheet decl
+          else if (subConstInfo.isUnsafe && ! constInfo.isUnsafe) ||
+                  (subConstInfo.isPartial && ! constInfo.isPartial) then
+            pure { name,
+                    status := "failed",
+                    output := "Declaration is partial or unsafe",
+                    score := 0.0 }
+          else
+            pure { name,
+                    status := "passed",
+                    score := pts,
+                    output := "Passed all tests" }
         else
           pure { name,
                  status := "failed",
