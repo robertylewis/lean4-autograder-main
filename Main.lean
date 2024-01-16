@@ -5,7 +5,7 @@ import AutograderLib
 open Lean IO System Elab Command
 
 -- Don't change these
-def agPkgPathPrefix : FilePath := "lake-packages" / "autograder"
+def agPkgPathPrefix : FilePath := ".lake" / "packages" / "autograder"
 def solutionDirName := "AutograderTests"
 def submissionUploadDir : FilePath := "/autograder/submission"
 def resultsJsonPath : FilePath := ".." / "results" / "results.json"

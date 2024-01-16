@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# At submision time, this script is located at `~/lake-packages/autograder/run_autograder_main`.
+# At submision time, this script is located at `~/.lake/packages/autograder/run_autograder_main`.
 # The `run_autograder` script is expected to copy it to `~`.
 # It is run in `~`.
 
