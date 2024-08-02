@@ -234,7 +234,7 @@ def compileAutograder : IO Unit := do
       ++ out.stderr
 
 def getErrorsStr (ml : MessageLog) : IO String := do
-  let errorMsgs := ml.msgs.filter (λ m => m.severity == .error)
+  let errorMsgs := ml.toList.filter (λ m => m.severity == .error)
   let errors ← errorMsgs.mapM (λ m => m.toString)
   let errorTxt := errors.foldl (λ acc e => acc ++ "\n" ++ e) ""
   return errorTxt
@@ -297,13 +297,14 @@ unsafe def main : IO Unit := do
   let messages := frontEndState.commandState.messages
   let submissionEnv := frontEndState.commandState.env
 
+  let err ← getErrorsStr messages
   let output := output ++
     if messages.hasErrors
     then "Warning: Your submission contains one or more errors, which are "
           ++ "listed below. You should attempt to correct these errors prior "
           ++ "to your final submission. Any responses with errors will be "
           ++ "treated by the autograder as containing \"sorry.\"\n"
-          ++ (← getErrorsStr messages)
+          ++ err
     else ""
 
   -- Provide debug info for staff
