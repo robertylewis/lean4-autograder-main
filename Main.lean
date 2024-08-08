@@ -16,8 +16,8 @@ def submissionFileName := "Assignment.lean"
 -- These are generated based on the above
 def sheetModuleName := s!"{solutionDirName}.{solutionModuleName}".toName
 def sheetFileName := s!"{solutionModuleName}.lean"
-def sheetFile : FilePath :=
-  agPkgPathPrefix / solutionDirName / sheetFileName
+-- ".lake/packages/autograder/AutograderTests/AutograderTests.Solution.lean"
+def sheetFile : FilePath := agPkgPathPrefix / solutionDirName / sheetFileName
 
 -- Used for non-exercise-specific results (e.g., global failures)
 structure FailureResult where
@@ -93,8 +93,7 @@ def gradeSubmission (sheet submission : Environment)
   : IO (Array ExerciseResult) := do
   let mut results := #[]
 
-  for constEntry in sheet.constants.toList do
-    let (name, constInfo) := constEntry
+  for (name, constInfo) in sheet.constants.toList do
     -- Only consider annotated, non-internal declarations
     if let some pts := problemAttr.getParam? sheet name then
     if not name.isInternal then
@@ -121,8 +120,8 @@ def gradeSubmission (sheet submission : Environment)
                                 ++ s!"{subConstInfo.type}",
                      score := 0.0 }
           -- * Submitted declaration must use only legal axioms
-          else if let some badAx :=
-            findInvalidAxiom submissionState.axioms.toList sheet submission
+          else if let some badAx := 
+            findInvalidAxiom submissionState.axioms.toList sheet submission 
           then
             pure { name,
                     status := "failed",
@@ -146,6 +145,36 @@ def gradeSubmission (sheet submission : Environment)
                  output := "Declaration not found in submission",
                  score := 0.0 }
       results := results.push result
+
+    if let some pts := definitionAttr.getParam? sheet name then
+      if not name.isInternal then
+        let result ← 
+          if let some subConstInfo := submission.find? name then
+            -- * Ensure declaration doesn't use `sorry`
+            if subConstInfo.value?.any (·.hasSorry) then
+              pure { name,
+                     status := "failed",
+                     output := "Definition contains sorry",
+                     score := 0.0 }
+            -- * Ensure declaration type matches sheet
+            else if not (constInfo.type == subConstInfo.type) then
+                pure { name,
+                       status := "failed",
+                       output := "Type is different from expected: "
+                                  ++ s!"{constInfo.type} does not match "
+                                  ++ s!"{subConstInfo.type}",
+                       score := 0.0 }
+            else
+              pure { name,
+                     status := "passed",
+                     score := pts,
+                     output := "Passed all tests" }
+          else 
+            pure { name,
+                   status := "failed",
+                   output := "Declaration not found in submission",
+                   score := 0.0 }
+        results := results.push result
 
   -- Gradescope will not accept an empty tests list, and this most likely
   -- indicates a misconfiguration anyway
