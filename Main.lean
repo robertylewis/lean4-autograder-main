@@ -96,57 +96,57 @@ def gradeSubmission (sheet submission : Environment)
   for (name, constInfo) in sheet.constants.toList do
     -- Only consider annotated, non-internal declarations
     if let some pts := problemAttr.getParam? sheet name then
-    if not name.isInternal then
-      let result ←
-        -- exercise to be filled in
-        if let some subConstInfo := submission.find? name then
-          -- Gather axioms in submitted declaration
-          let (_, submissionState) :=
-                ((CollectAxioms.collect name).run submission).run {}
-          -- Tests:
-          -- * Ensure declaration doesn't use `sorry` (separate from other
-          --   axioms since it's especially common)
-          if subConstInfo.value?.any (·.hasSorry) then
-            pure { name,
-                   status := "failed",
-                   output := "Proof contains sorry",
-                   score := 0.0 }
-          -- * Ensure declaration type matches sheet
-          else if not (constInfo.type == subConstInfo.type) then
+      if not name.isInternal then
+        let result ←
+          -- exercise to be filled in
+          if let some subConstInfo := submission.find? name then
+            -- Gather axioms in submitted declaration
+            let (_, submissionState) :=
+                  ((CollectAxioms.collect name).run submission).run {}
+            -- Tests:
+            -- * Ensure declaration doesn't use `sorry` (separate from other
+            --   axioms since it's especially common)
+            if subConstInfo.value?.any (·.hasSorry) then
               pure { name,
                      status := "failed",
-                     output := "Type is different from expected: "
-                                ++ s!"{constInfo.type} does not match "
-                                ++ s!"{subConstInfo.type}",
+                     output := "Proof contains sorry",
                      score := 0.0 }
-          -- * Submitted declaration must use only legal axioms
-          else if let some badAx := 
-            findInvalidAxiom submissionState.axioms.toList sheet submission 
-          then
-            pure { name,
-                    status := "failed",
-                    output := s!"Uses unexpected axiom {badAx}",
-                    score := 0.0 }
-          -- * Submitted declaration must match the soundness of the sheet decl
-          else if (subConstInfo.isUnsafe && ! constInfo.isUnsafe) ||
-                  (subConstInfo.isPartial && ! constInfo.isPartial) then
-            pure { name,
-                    status := "failed",
-                    output := "Declaration is partial or unsafe",
-                    score := 0.0 }
+            -- * Ensure declaration type matches sheet
+            else if not (constInfo.type == subConstInfo.type) then
+                pure { name,
+                       status := "failed",
+                       output := "Type is different from expected: "
+                                  ++ s!"{constInfo.type} does not match "
+                                  ++ s!"{subConstInfo.type}",
+                       score := 0.0 }
+            -- * Submitted declaration must use only legal axioms
+            else if let some badAx := 
+              findInvalidAxiom submissionState.axioms.toList sheet submission 
+            then
+              pure { name,
+                      status := "failed",
+                      output := s!"Uses unexpected axiom {badAx}",
+                      score := 0.0 }
+            -- * Submitted declaration must match the soundness of the sheet decl
+            else if (subConstInfo.isUnsafe && ! constInfo.isUnsafe) ||
+                    (subConstInfo.isPartial && ! constInfo.isPartial) then
+              pure { name,
+                      status := "failed",
+                      output := "Declaration is partial or unsafe",
+                      score := 0.0 }
+            else
+              pure { name,
+                      status := "passed",
+                      score := pts,
+                      output := "Passed all tests" }
           else
             pure { name,
-                    status := "passed",
-                    score := pts,
-                    output := "Passed all tests" }
-        else
-          pure { name,
-                 status := "failed",
-                 output := "Declaration not found in submission",
-                 score := 0.0 }
-      results := results.push result
+                   status := "failed",
+                   output := "Declaration not found in submission",
+                   score := 0.0 }
+        results := results.push result
 
-    if let some pts := definitionAttr.getParam? sheet name then
+    else if let some pts := definitionAttr.getParam? sheet name then
       if not name.isInternal then
         let result ← 
           if let some subConstInfo := submission.find? name then
@@ -164,11 +164,23 @@ def gradeSubmission (sheet submission : Environment)
                                   ++ s!"{constInfo.type} does not match "
                                   ++ s!"{subConstInfo.type}",
                        score := 0.0 }
-            else
+            -- * Submitted declaration must match the soundness of the sheet decl
+            else if (subConstInfo.isUnsafe && ! constInfo.isUnsafe) ||
+                    (subConstInfo.isPartial && ! constInfo.isPartial) then
+              pure { name,
+                      status := "failed",
+                      output := "Declaration is partial or unsafe",
+                      score := 0.0 }
+            else if (subConstInfo.value!.eqv constInfo.value!) then
               pure { name,
                      status := "passed",
                      score := pts,
                      output := "Passed all tests" }
+            else
+              pure { name,
+                      status := "passed",
+                      score := pts,
+                      output := "Passed all tests" }
           else 
             pure { name,
                    status := "failed",
