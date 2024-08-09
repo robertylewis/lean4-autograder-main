@@ -175,12 +175,12 @@ def gradeSubmission (sheet submission : Environment)
               pure { name,
                      status := "passed",
                      score := pts,
-                     output := "Passed all tests" }
+                     output := "Marked as equiv" }
             else
               pure { name,
-                      status := "passed",
+                      status := "failed",
                       score := pts,
-                      output := "Passed all tests" }
+                      output := "Not marked as equiv" }
           else 
             pure { name,
                    status := "failed",
