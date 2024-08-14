@@ -2,7 +2,7 @@ import Lean
 import AutograderLib
 -- Ensures Mathlib is compiled when the container is being uploaded:
 -- import Mathlib
-open Lean IO System Elab Command
+open Lean IO System Elab Command Meta Lean.Meta Lean.Elab.Tactic
 
 -- Don't change these
 def agPkgPathPrefix : FilePath := ".lake" / "packages" / "autograder"
@@ -73,6 +73,21 @@ def findInvalidAxiom (submissionAxioms : List Name)
       return ax
   none
 
+/--
+Tries to close new goals using `Eq.refl`, `Heq.refl`, and `assumption`
+-/
+def checkDef (sheetExpr subExpr : Expr) : MetaM Bool := do
+  let eqExpr ← mkEq sheetExpr subExpr
+  let mvar ← mkFreshExprMVar (some eqExpr)
+  let mvarId := mvar.mvarId!
+
+  -- Tries to close new goals using `Eq.refl`, `Heq.refl`, and `assumption`
+  let mvarId ← mvarId.heqOfEq
+  try mvarId.refl; return true catch _ => pure () 
+  try mvarId.hrefl; return true catch _ => pure () 
+  if (← mvarId.assumptionCore) then return true
+  return false
+
 -- Ideally, we could format our Gradescope output nicely as HTML and escape
 -- inserted file names/error messages/etc. Unfortunately, Gradescope doesn't
 -- handle pre-escaped HTML well (it tries to re-escape it), so until a
@@ -89,8 +104,7 @@ def exitWithError {α} (errMsg : String) (instructorInfo: String := "")
   IO.FS.writeFile resultsJsonPath (toJson result).pretty
   throw <| IO.userError (errMsg ++ "\n" ++ instructorInfo)
 
-def gradeSubmission (sheet submission : Environment)
-  : IO (Array ExerciseResult) := do
+def gradeSubmission (sheet submission : Environment) : IO (Array ExerciseResult) := do
   let mut results := #[]
 
   for (name, constInfo) in sheet.constants.toList do
@@ -98,10 +112,10 @@ def gradeSubmission (sheet submission : Environment)
     if let some pts := problemAttr.getParam? sheet name then
       if not name.isInternal then
         let result ←
-          -- exercise to be filled in
+          -- Exercise to be filled in
           if let some subConstInfo := submission.find? name then
             -- Gather axioms in submitted declaration
-            let (_, submissionState) :=
+            let (_, submissionState) := 
                   ((CollectAxioms.collect name).run submission).run {}
             -- Tests:
             -- * Ensure declaration doesn't use `sorry` (separate from other
@@ -171,16 +185,33 @@ def gradeSubmission (sheet submission : Environment)
                       status := "failed",
                       output := "Declaration is partial or unsafe",
                       score := 0.0 }
+            else if (subConstInfo.value!.equal constInfo.value!) then
+              pure { name,
+                     status := "passed",
+                     score := pts,
+                     output := "Marked as equal" }
             else if (subConstInfo.value!.eqv constInfo.value!) then
               pure { name,
                      status := "passed",
                      score := pts,
-                     output := "Marked as equiv" }
+                     output := "Marked as equivalent" }
             else
+              let sheetExpr := constInfo.value!
+              let subExpr := subConstInfo.value!
+              let ctx : Core.Context := { fileName := "", fileMap := default }
+              let cstate : Core.State := { env := submission, messages := {} }
+              let (proved?, _, _ ) ← MetaM.toIO (checkDef sheetExpr subExpr) ctx cstate
+
+              if proved? then
+                pure { name,
+                       status := "passed",
+                       score := pts,
+                       output := "Proven to be equivalent" }
+              else
               pure { name,
                       status := "failed",
                       score := pts,
-                      output := "Not marked as equiv" }
+                      output := "Not marked as equivalent" }
           else 
             pure { name,
                    status := "failed",
