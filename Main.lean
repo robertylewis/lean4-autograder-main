@@ -73,20 +73,25 @@ def findInvalidAxiom (submissionAxioms : List Name)
       return ax
   none
 
-/--
-Tries to close new goals using `Eq.refl`, `Heq.refl`, and `assumption`
--/
-def checkDef (sheetExpr subExpr : Expr) : MetaM Bool := do
+-- Taken from aesop/Aesop/Util/Basic.lean
+def runTacticMAsMetaM (x : TacticM α) (goals : List MVarId) :
+    MetaM (α × List MVarId) := do
+  let (a, s) ← x |>.run { elaborator := .anonymous } |>.run { goals } |>.run'
+  return (a, s.goals)
+
+def checkProof (sheetExpr subExpr : Expr) : MetaM Bool := do
   let eqExpr ← mkEq sheetExpr subExpr
   let mvar ← mkFreshExprMVar (some eqExpr)
   let mvarId := mvar.mvarId!
 
-  -- Tries to close new goals using `Eq.refl`, `Heq.refl`, and `assumption`
+  let mvarId ← mvarId.unfoldReducible
   let mvarId ← mvarId.heqOfEq
-  try mvarId.refl; return true catch _ => pure () 
+  try mvarId.refl; return true catch _ => pure ()
   try mvarId.hrefl; return true catch _ => pure () 
   if (← mvarId.assumptionCore) then return true
-  return false
+
+  let (_, goals) ← runTacticMAsMetaM (evalTactic (← `(tactic| try first | rfl | simp))) [mvarId]
+  if goals.isEmpty then return true else return false
 
 -- Ideally, we could format our Gradescope output nicely as HTML and escape
 -- inserted file names/error messages/etc. Unfortunately, Gradescope doesn't
@@ -185,6 +190,11 @@ def gradeSubmission (sheet submission : Environment) : IO (Array ExerciseResult)
                       status := "failed",
                       output := "Declaration is partial or unsafe",
                       score := 0.0 }
+            else if (!subConstInfo.hasValue) then
+              pure { name,
+                     status := "failed",
+                     score := 0.0,
+                     output := "Definition does not contain a value" }
             else if (subConstInfo.value!.equal constInfo.value!) then
               pure { name,
                      status := "passed",
@@ -199,8 +209,8 @@ def gradeSubmission (sheet submission : Environment) : IO (Array ExerciseResult)
               let sheetExpr := constInfo.value!
               let subExpr := subConstInfo.value!
               let ctx : Core.Context := { fileName := "", fileMap := default }
-              let cstate : Core.State := { env := submission, messages := {} }
-              let (proved?, _, _ ) ← MetaM.toIO (checkDef sheetExpr subExpr) ctx cstate
+              let cstate : Core.State := { env := submission }
+              let (proved?, _, _ ) ← MetaM.toIO (checkProof sheetExpr subExpr) ctx cstate
 
               if proved? then
                 pure { name,
@@ -208,10 +218,10 @@ def gradeSubmission (sheet submission : Environment) : IO (Array ExerciseResult)
                        score := pts,
                        output := "Proven to be equivalent" }
               else
-              pure { name,
-                      status := "failed",
-                      score := pts,
-                      output := "Not marked as equivalent" }
+                pure { name,
+                        status := "failed",
+                        score := 0.0,
+                        output := "Not marked as equivalent" }
           else 
             pure { name,
                    status := "failed",
