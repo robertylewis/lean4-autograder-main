@@ -9,7 +9,7 @@ syntax scientific : ptVal
 
 syntax (name := problem) "autograded" ptVal : attr
 syntax (name := definition) "autogradedDef" ptVal : attr
-syntax (name := validTactics) "validTactics" "[" sepBy(tactic, ",") "]" : attr
+syntax (name := validTactics) "validTactics" "(" sepBy(tactic, ",") ")" : attr
 
 initialize problemAttr : ParametricAttribute Float ←  
   registerParametricAttribute {
@@ -42,7 +42,7 @@ initialize tacticAttr : ParametricAttribute (List (TacticM Unit)) ←
     name := `validTactics
     descr := "Specifies the tactics run to validate a solution"
     getParam := λ _ stx => match stx with
-      | `(attr| validTactics [$tacs,*]) => do
+      | `(attr| validTactics ($tacs,*)) => do
         let mut res := []
         for tac in tacs.getElems do
           let tacM : TacticM Unit := do evalTactic tac.raw
