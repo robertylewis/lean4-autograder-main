@@ -73,25 +73,24 @@ def findInvalidAxiom (submissionAxioms : List Name)
       return ax
   none
 
--- Taken from aesop/Aesop/Util/Basic.lean
-def runTacticMAsMetaM (x : TacticM α) (goals : List MVarId) :
+-- Source: aesop/Aesop/Util/Basic.lean
+def runTacticMAsMetaM {α : Type} (tactic : TacticM α) (goals : List MVarId) :
     MetaM (α × List MVarId) := do
-  let (a, s) ← x |>.run { elaborator := .anonymous } |>.run { goals } |>.run'
+  let (a, s) ← tactic |>.run { elaborator := .anonymous } |>.run { goals } |>.run'
   return (a, s.goals)
 
-def checkProof (sheetExpr subExpr : Expr) : MetaM Bool := do
+def checkProof (sheetExpr subExpr : Expr) (tactics : List (TacticM Unit)) : MetaM Bool := do
+  -- Create a goal to prove that the two expressions are equal
   let eqExpr ← mkEq sheetExpr subExpr
   let mvar ← mkFreshExprMVar (some eqExpr)
   let mvarId := mvar.mvarId!
 
-  let mvarId ← mvarId.unfoldReducible
-  let mvarId ← mvarId.heqOfEq
-  try mvarId.refl; return true catch _ => pure ()
-  try mvarId.hrefl; return true catch _ => pure () 
-  if (← mvarId.assumptionCore) then return true
+  -- TODO: check if there is backtracking after the tactic is applied 
+  for tac in tactics do
+    let (_, goals) ← runTacticMAsMetaM (try tac catch _ => pure ()) [mvarId]
+    if goals.isEmpty then return true 
 
-  let (_, goals) ← runTacticMAsMetaM (evalTactic (← `(tactic| try first | rfl | simp))) [mvarId]
-  if goals.isEmpty then return true else return false
+  return false
 
 -- Ideally, we could format our Gradescope output nicely as HTML and escape
 -- inserted file names/error messages/etc. Unfortunately, Gradescope doesn't
@@ -210,7 +209,8 @@ def gradeSubmission (sheet submission : Environment) : IO (Array ExerciseResult)
               let subExpr := subConstInfo.value!
               let ctx : Core.Context := { fileName := "", fileMap := default }
               let cstate : Core.State := { env := submission }
-              let (proved?, _, _ ) ← MetaM.toIO (checkProof sheetExpr subExpr) ctx cstate
+              let tactics : List (TacticM Unit) := if let some pts := tacticAttr.getParam? sheet name then pts else []
+              let (proved?, _, _ ) ← MetaM.toIO (checkProof sheetExpr subExpr tactics) ctx cstate
 
               if proved? then
                 pure { name,
@@ -219,9 +219,9 @@ def gradeSubmission (sheet submission : Environment) : IO (Array ExerciseResult)
                        output := "Proven to be equivalent" }
               else
                 pure { name,
-                        status := "failed",
-                        score := 0.0,
-                        output := "Not marked as equivalent" }
+                       status := "failed",
+                       score := 0.0,
+                       output := "Not marked as equivalent" }
           else 
             pure { name,
                    status := "failed",
