@@ -79,19 +79,6 @@ def runTacticMAsMetaM {α : Type} (tactic : TacticM α) (goals : List MVarId) :
   let (a, s) ← tactic |>.run { elaborator := .anonymous } |>.run { goals } |>.run'
   return (a, s.goals)
 
-def checkProof (sheetExpr subExpr : Expr) (tactics : List (TacticM Unit)) : MetaM Bool := do
-  -- Create a goal to prove that the two expressions are equal
-  let eqExpr ← mkEq sheetExpr subExpr
-  let mvar ← mkFreshExprMVar (some eqExpr)
-  let mvarId := mvar.mvarId!
-
-  -- TODO: check if there is backtracking after the tactic is applied 
-  for tac in tactics do
-    let (_, goals) ← runTacticMAsMetaM (try tac catch _ => pure ()) [mvarId]
-    if goals.isEmpty then return true 
-
-  return false
-
 -- Ideally, we could format our Gradescope output nicely as HTML and escape
 -- inserted file names/error messages/etc. Unfortunately, Gradescope doesn't
 -- handle pre-escaped HTML well (it tries to re-escape it), so until a
@@ -207,21 +194,46 @@ def gradeSubmission (sheet submission : Environment) : IO (Array ExerciseResult)
             else
               let sheetExpr := constInfo.value!
               let subExpr := subConstInfo.value!
+              let tactics : Array (TacticM Unit) :=
+                if let some pts := tacticAttr.getParam? sheet name then pts
+                else if let some pts := defaultTactics then pts
+                else #[]
+
+              -- Run tactics to prove equality
+              let checkEquality : MetaM ExerciseResult := do
+                -- Create a goal to prove that the two expressions are equal
+                let eqExpr ← mkEq sheetExpr subExpr
+                let mvar ← mkFreshExprMVar (some eqExpr)
+                let mvarId := mvar.mvarId!
+                -- Try refl and hrefl
+                try mvarId.refl; 
+                    return { name,
+                             status := "passed",
+                             output := "Proven to be equivalent by refl",
+                             score := pts }
+                catch _ => pure ()
+                try mvarId.hrefl; 
+                    return { name,
+                             status := "passed",
+                             output := "Proven to be equivalent by hrefl",
+                             score := pts }
+                catch _ => pure ()
+                -- Run tactics to prove equality
+                -- TODO: check if there is backtracking after the tactic is applied 
+                for tac in tactics do
+                  let (_, goals) ← runTacticMAsMetaM (try tac catch _ => pure ()) [mvarId]
+                  if goals.isEmpty then 
+                    return { name,
+                             status := "passed",
+                             output := s!"Proven to be equivalent by", 
+                             score := pts }
+
+                return { name, status := "failed", score := 0.0, output := "Not marked as equivalent" }
+
               let ctx : Core.Context := { fileName := "", fileMap := default }
               let cstate : Core.State := { env := submission }
-              let tactics : List (TacticM Unit) := if let some pts := tacticAttr.getParam? sheet name then pts else []
-              let (proved?, _, _ ) ← MetaM.toIO (checkProof sheetExpr subExpr tactics) ctx cstate
-
-              if proved? then
-                pure { name,
-                       status := "passed",
-                       score := pts,
-                       output := "Proven to be equivalent" }
-              else
-                pure { name,
-                       status := "failed",
-                       score := 0.0,
-                       output := "Not marked as equivalent" }
+              let (proved?, _, _ ) ← MetaM.toIO checkEquality ctx cstate
+              pure proved?
           else 
             pure { name,
                    status := "failed",
