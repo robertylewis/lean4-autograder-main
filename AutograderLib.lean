@@ -9,7 +9,7 @@ syntax scientific : ptVal
 
 syntax (name := problem) "autograded" ptVal : attr
 syntax (name := definition) "autogradedDef" ptVal : attr
-syntax (name := validTactics) "validTactics" sepBy(tactic, ","): attr
+syntax (name := validTactics) "validTactics" "#[" sepBy(tactic, ",") "]" : attr
 
 initialize problemAttr : ParametricAttribute Float ←  
   registerParametricAttribute {
@@ -37,20 +37,24 @@ initialize definitionAttr : ParametricAttribute Float ←
     afterSet := λ _ _ => do pure ()
   }
 
-initialize tacticAttr : ParametricAttribute (List (TacticM Unit)) ← 
+initialize tacticAttr : ParametricAttribute (Array (TacticM Unit)) ← 
   registerParametricAttribute {
     name := `validTactics
     descr := "Specifies the tactics run to validate a solution"
-    getParam := λ _ stx => match stx with
-      | `(attr| validTactics $tacs,*) => do
-        let mut res := []
-        for tac in tacs.getElems do
-          let tacM : TacticM Unit := do evalTactic tac.raw
-          res := res.append [tacM]
-        return res
-      | _ => throwError "Invalid tactic attribute"
+    getParam := λ _ stx => 
+      match stx with
+        | `(attr| validTactics #[$tacs,*]) =>
+          return tacs.getElems.map fun tac => do evalTactic tac.raw
+        | _ => throwError "Invalid tactic attribute"
     afterSet := λ _ _ => do pure ()
   }
+
+def defaultTactics : Option (Array (TacticM Unit)):= do
+  let mut res := #[]
+  for tac in #[`(tactic| rfl), `(tactic| simp)] do
+    let tacM : TacticM Unit := do evalTactic (← tac)
+    res := res.push tacM
+  return res 
 
 initialize legalAxiomAttr : TagAttribute ←
   registerTagAttribute `legalAxiom
