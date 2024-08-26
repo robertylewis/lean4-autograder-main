@@ -10,6 +10,7 @@ syntax scientific : ptVal
 syntax (name := problem) "autograded" ptVal : attr
 syntax (name := definition) "autogradedDef" ptVal : attr
 syntax (name := validTactics) "validTactics" "#[" sepBy(tactic, ",") "]" : attr
+syntax (name := defaultTactics) "defaultTactics" "#[" sepBy(tactic, ",") "]" : attr
 
 initialize problemAttr : ParametricAttribute Float ←  
   registerParametricAttribute {
@@ -37,24 +38,33 @@ initialize definitionAttr : ParametricAttribute Float ←
     afterSet := λ _ _ => do pure ()
   }
 
-initialize tacticAttr : ParametricAttribute (Array (TacticM Unit)) ← 
+initialize tacticAttr : ParametricAttribute (Array (String × TacticM Unit)) ← 
   registerParametricAttribute {
     name := `validTactics
     descr := "Specifies the tactics run to validate a solution"
     getParam := λ _ stx => 
       match stx with
         | `(attr| validTactics #[$tacs,*]) =>
-          return tacs.getElems.map fun tac => do evalTactic tac.raw
+          return tacs.getElems.map fun tac => (
+            tac.raw.prettyPrint.pretty.trim,
+            do evalTactic tac.raw)
         | _ => throwError "Invalid tactic attribute"
     afterSet := λ _ _ => do pure ()
   }
 
-def defaultTactics : Option (Array (TacticM Unit)):= do
-  let mut res := #[]
-  for tac in #[`(tactic| rfl), `(tactic| simp)] do
-    let tacM : TacticM Unit := do evalTactic (← tac)
-    res := res.push tacM
-  return res 
+initialize defaultTacticsAttr : ParametricAttribute (Array (String × TacticM Unit)) ← 
+  registerParametricAttribute {
+    name := `defaultTactics
+    descr := "Specifies the default tactics run to validate a solution"
+    getParam := λ _ stx => 
+      match stx with
+        | `(attr| defaultTactics #[$tacs,*]) =>
+          return tacs.getElems.map fun tac => (
+            tac.raw.prettyPrint.pretty.trim,
+            do evalTactic tac.raw)
+        | _ => throwError "Invalid tactic attribute"
+    afterSet := λ _ _ => do pure ()
+  }
 
 initialize legalAxiomAttr : TagAttribute ←
   registerTagAttribute `legalAxiom

@@ -98,6 +98,11 @@ def exitWithError {α} (errMsg : String) (instructorInfo: String := "")
 def gradeSubmission (sheet submission : Environment) : IO (Array ExerciseResult) := do
   let mut results := #[]
 
+  -- Check if there are default tactics defined in the sheet
+  let defaultTactics := 
+    if let some d := defaultTacticsAttr.getParam? sheet `setDefaultTactics then d
+    else #[]
+
   for (name, constInfo) in sheet.constants.toList do
     -- Only consider annotated, non-internal declarations
     if let some pts := problemAttr.getParam? sheet name then
@@ -194,10 +199,9 @@ def gradeSubmission (sheet submission : Environment) : IO (Array ExerciseResult)
             else
               let sheetExpr := constInfo.value!
               let subExpr := subConstInfo.value!
-              let tactics : Array (TacticM Unit) :=
+              let tactics :=
                 if let some pts := tacticAttr.getParam? sheet name then pts
-                else if let some pts := defaultTactics then pts
-                else #[]
+                else defaultTactics
 
               -- Run tactics to prove equality
               let checkEquality : MetaM ExerciseResult := do
@@ -220,12 +224,12 @@ def gradeSubmission (sheet submission : Environment) : IO (Array ExerciseResult)
                 catch _ => pure ()
                 -- Run tactics to prove equality
                 -- TODO: check if there is backtracking after the tactic is applied 
-                for tac in tactics do
+                for (tacName, tac) in tactics do
                   let (_, goals) ← runTacticMAsMetaM (try tac catch _ => pure ()) [mvarId]
                   if goals.isEmpty then 
                     return { name,
                              status := "passed",
-                             output := s!"Proven to be equivalent by", 
+                             output := s!"Proven to be equivalent by {tacName}",
                              score := pts }
 
                 return { name, status := "failed", score := 0.0, output := "Not marked as equivalent" }
