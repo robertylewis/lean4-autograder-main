@@ -99,13 +99,13 @@ def gradeSubmission (sheet submission : Environment) : IO (Array ExerciseResult)
   let mut results := #[]
 
   -- Check if there are default tactics defined in the sheet
-  let defaultTactics := 
+  let sheetDefaultTactics := 
     if let some d := defaultTacticsAttr.getParam? sheet `setDefaultTactics then d
     else #[]
 
   for (name, constInfo) in sheet.constants.toList do
     -- Only consider annotated, non-internal declarations
-    if let some pts := problemAttr.getParam? sheet name then
+    if let some pts := autogradedProofAttr.getParam? sheet name then
       if not name.isInternal then
         let result ←
           -- Exercise to be filled in
@@ -156,7 +156,7 @@ def gradeSubmission (sheet submission : Environment) : IO (Array ExerciseResult)
                    score := 0.0 }
         results := results.push result
 
-    else if let some pts := definitionAttr.getParam? sheet name then
+    else if let some pts := autogradedDefAttr.getParam? sheet name then
       if not name.isInternal then
         let result ← 
           if let some subConstInfo := submission.find? name then
@@ -200,8 +200,8 @@ def gradeSubmission (sheet submission : Environment) : IO (Array ExerciseResult)
               let sheetExpr := constInfo.value!
               let subExpr := subConstInfo.value!
               let tactics :=
-                if let some pts := tacticAttr.getParam? sheet name then pts
-                else defaultTactics
+                if let some pts := validTacticsAttr.getParam? sheet name then pts
+                else sheetDefaultTactics
 
               -- Run tactics to prove equality
               let checkEquality : MetaM ExerciseResult := do

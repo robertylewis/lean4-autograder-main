@@ -7,40 +7,40 @@ declare_syntax_cat ptVal
 syntax num : ptVal
 syntax scientific : ptVal
 
-syntax (name := problem) "autograded" ptVal : attr
-syntax (name := definition) "autogradedDef" ptVal : attr
-syntax (name := validTactics) "validTactics" "#[" sepBy(tactic, ",") "]" : attr
-syntax (name := defaultTactics) "defaultTactics" "#[" sepBy(tactic, ",") "]" : attr
+syntax (name := autograded_proof) "autogradedProof" ptVal : attr
+syntax (name := autograded_def) "autogradedDef" ptVal : attr
+syntax:50 (name := valid_tactics) "validTactics" "#[" sepBy(tactic, ",") "]" : attr
+syntax:50 (name := default_tactics) "defaultTactics" "#[" sepBy(tactic, ",") "]" : attr
 
-initialize problemAttr : ParametricAttribute Float ←  
+initialize autogradedProofAttr : ParametricAttribute Float ←  
   registerParametricAttribute {
-    name := `problem
+    name := `autograded_proof
     descr := "Specifies the point value of a problem"
     getParam := λ _ stx => match stx with
-      | `(attr| autograded $pts:num) => return pts.getNat.toFloat
-      | `(attr| autograded $pts:scientific) =>
+      | `(attr| autogradedProof $pts:num) => return pts.getNat.toFloat
+      | `(attr| autogradedProof $pts:scientific) =>
         let (n, s, d) := pts.getScientific
         return Float.ofScientific n s d
-      | _  => throwError "Invalid problem attribute"
+      | _  => throwError "Invalid autograded proof attribute"
     afterSet := λ _ _ => do pure ()
   }
 
-initialize definitionAttr : ParametricAttribute Float ←
+initialize autogradedDefAttr : ParametricAttribute Float ←
   registerParametricAttribute {
-    name := `definition
+    name := `autograded_def
     descr := "Specifies the point value of a problem"
     getParam := λ _ stx => match stx with
       | `(attr| autogradedDef $pts:num) => return pts.getNat.toFloat
       | `(attr| autogradedDef $pts:scientific) =>
         let (n, s, d) := pts.getScientific
         return Float.ofScientific n s d
-      | _  => throwError "Invalid problem attribute"
+      | _  => throwError "Invalid autograded definition attribute"
     afterSet := λ _ _ => do pure ()
   }
 
-initialize tacticAttr : ParametricAttribute (Array (String × TacticM Unit)) ← 
+initialize validTacticsAttr : ParametricAttribute (Array (String × TacticM Unit)) ← 
   registerParametricAttribute {
-    name := `validTactics
+    name := `valid_tactics
     descr := "Specifies the tactics run to validate a solution"
     getParam := λ _ stx => 
       match stx with
@@ -48,13 +48,13 @@ initialize tacticAttr : ParametricAttribute (Array (String × TacticM Unit)) ←
           return tacs.getElems.map fun tac => (
             tac.raw.prettyPrint.pretty.trim,
             do evalTactic tac.raw)
-        | _ => throwError "Invalid tactic attribute"
+        | _ => throwError "Invalid valid tactic attribute"
     afterSet := λ _ _ => do pure ()
   }
 
 initialize defaultTacticsAttr : ParametricAttribute (Array (String × TacticM Unit)) ← 
   registerParametricAttribute {
-    name := `defaultTactics
+    name := `default_tactics
     descr := "Specifies the default tactics run to validate a solution"
     getParam := λ _ stx => 
       match stx with
@@ -62,7 +62,7 @@ initialize defaultTacticsAttr : ParametricAttribute (Array (String × TacticM Un
           return tacs.getElems.map fun tac => (
             tac.raw.prettyPrint.pretty.trim,
             do evalTactic tac.raw)
-        | _ => throwError "Invalid tactic attribute"
+        | _ => throwError "Invalid default tactic attribute"
     afterSet := λ _ _ => do pure ()
   }
 
