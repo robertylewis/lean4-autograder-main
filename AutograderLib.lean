@@ -2,15 +2,13 @@ import Lean
 
 open Lean Lean.Elab.Tactic
 
--- Attribute for point values
+-- Main autograder attributes
 declare_syntax_cat ptVal
 syntax num : ptVal
 syntax scientific : ptVal
 
 syntax (name := autograded_proof) "autogradedProof" ptVal : attr
 syntax (name := autograded_def) "autogradedDef" ptVal : attr
-syntax:50 (name := valid_tactics) "validTactics" "#[" sepBy(tactic, ",") "]" : attr
-syntax:50 (name := default_tactics) "defaultTactics" "#[" sepBy(tactic, ",") "]" : attr
 
 initialize autogradedProofAttr : ParametricAttribute Float ←  
   registerParametricAttribute {
@@ -38,6 +36,10 @@ initialize autogradedDefAttr : ParametricAttribute Float ←
     afterSet := λ _ _ => do pure ()
   }
 
+-- Autograder tactics attributes
+syntax:50 (name := valid_tactics) "validTactics" "#[" sepBy(tactic, ",") "]" : attr
+syntax:50 (name := default_tactics) "defaultTactics" "#[" sepBy(tactic, ",") "]" : attr
+
 initialize validTacticsAttr : ParametricAttribute (Array (String × TacticM Unit)) ← 
   registerParametricAttribute {
     name := `valid_tactics
@@ -52,6 +54,7 @@ initialize validTacticsAttr : ParametricAttribute (Array (String × TacticM Unit
     afterSet := λ _ _ => do pure ()
   }
 
+-- We expect this to be an attribute that is set up over the config definition
 initialize defaultTacticsAttr : ParametricAttribute (Array (String × TacticM Unit)) ← 
   registerParametricAttribute {
     name := `default_tactics
@@ -63,6 +66,28 @@ initialize defaultTacticsAttr : ParametricAttribute (Array (String × TacticM Un
             tac.raw.prettyPrint.pretty.trim,
             do evalTactic tac.raw)
         | _ => throwError "Invalid default tactic attribute"
+    afterSet := λ _ _ => do pure ()
+  }
+
+-- Testing the autograder 
+declare_syntax_cat exerciseType
+syntax "proof" : exerciseType
+syntax "def" : exerciseType
+
+declare_syntax_cat status
+syntax "passes" : status
+syntax "fails" : status
+
+syntax (name := autograder_test) "autograderTest" status name : attr
+
+initialize autograderTestAttr : ParametricAttribute (Name × String) ← 
+  registerParametricAttribute {
+    name := `autograder_test
+    descr := "For testing purposes, specifies whether a submission is expected to pass or fail a test"
+    getParam := λ _ stx => match stx with
+      | `(attr| autograderTest passes $n) => return (n.getName, "passed")
+      | `(attr| autograderTest fails $n) => return (n.getName, "failed")
+      | _ => throwError "Invalid test autograder attribute"
     afterSet := λ _ _ => do pure ()
   }
 
