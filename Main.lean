@@ -95,13 +95,13 @@ def exitWithError {α} (errMsg : String) (instructorInfo: String := "")
   IO.FS.writeFile resultsJsonPath (toJson result).pretty
   throw <| IO.userError (errMsg ++ "\n" ++ instructorInfo)
 
-def checkDefinition (name : Name) (pts : Float) (constInfo subConstInfo : ConstantInfo) 
+def checkDefinition (name : Name) (pts : Float) (constInfo subConstInfo : ConstantInfo)
   (sheet : Environment) : IO ExerciseResult := do
     -- Get the list of tactics for the problem
     let tactics :=
-      if let some t := validTacticsAttr.getParam? sheet name then t 
+      if let some t := validTacticsAttr.getParam? sheet name then t
       else if let some d := defaultTacticsAttr.getParam? sheet `setDefaultTactics then d
-      else #[] 
+      else #[]
 
     -- * Ensure declaration doesn't use `sorry`
     if subConstInfo.value?.any (·.hasSorry) then
@@ -151,14 +151,14 @@ def checkDefinition (name : Name) (pts : Float) (constInfo subConstInfo : Consta
         let mvarId := mvar.mvarId!
 
         -- Try refl and hrefl
-        try mvarId.refl; 
+        try mvarId.refl;
             return { name,
                      status := "passed",
                      output := "Proven to be equivalent by refl",
                      score := pts }
         catch _ => pure ()
 
-        try mvarId.hrefl; 
+        try mvarId.hrefl;
             return { name,
                      status := "passed",
                      output := "Proven to be equivalent by hrefl",
@@ -166,18 +166,18 @@ def checkDefinition (name : Name) (pts : Float) (constInfo subConstInfo : Consta
         catch _ => pure ()
 
         -- Run tactics to prove equality
-        -- TODO: check if there is backtracking after the tactic is applied 
+        -- TODO: check if there is backtracking after the tactic is applied
         for (tacName, tac) in tactics do
           let (_, goals) ← runTacticMAsMetaM (try tac catch _ => pure ()) [mvarId]
-          if goals.isEmpty then 
+          if goals.isEmpty then
             return { name,
                      status := "passed",
                      output := s!"Proven to be equivalent by {tacName}",
                      score := pts }
 
-        return { name, 
-                 status := "failed", 
-                 score := 0.0, 
+        return { name,
+                 status := "failed",
+                 score := 0.0,
                  output := "Not marked as equivalent" }
 
       let ctx : Core.Context := { fileName := "", fileMap := default }
@@ -185,10 +185,10 @@ def checkDefinition (name : Name) (pts : Float) (constInfo subConstInfo : Consta
       let (proved?, _, _ ) ← MetaM.toIO checkEquality ctx cstate
       return proved?
 
-def checkProof (name : Name) (pts : Float) (constInfo subConstInfo : ConstantInfo) 
+def checkProof (name : Name) (pts : Float) (constInfo subConstInfo : ConstantInfo)
   (sheet submission : Environment) : IO ExerciseResult := do
     -- Gather axioms in submitted declaration
-    let (_, submissionState) := 
+    let (_, submissionState) :=
           ((CollectAxioms.collect name).run submission).run {}
 
     -- Tests:
@@ -208,8 +208,8 @@ def checkProof (name : Name) (pts : Float) (constInfo subConstInfo : ConstantInf
                           ++ s!"{subConstInfo.type}",
                score := 0.0 }
     -- * Submitted declaration must use only legal axioms
-    else if let some badAx := 
-      findInvalidAxiom submissionState.axioms.toList sheet submission 
+    else if let some badAx :=
+      findInvalidAxiom submissionState.axioms.toList sheet submission
     then
       pure { name,
               status := "failed",
@@ -232,31 +232,31 @@ def gradeSubmission (sheet submission : Environment) : IO (Array ExerciseResult)
   let mut results := #[]
 
   for (name, constInfo) in sheet.constants.toList do
-    -- Autograde proofs 
+    -- Autograde proofs
     if let some pts := autogradedProofAttr.getParam? sheet name then
         if not name.isInternal then
           if let some subConstInfo := submission.find? name then
               let result ← checkProof name pts constInfo subConstInfo sheet submission
               results := results.push result
             else
-              let result := 
+              let result :=
                 { name,
                   status := "failed",
                   output := "Declaration not found in submission",
                   score := 0.0 }
               results := results.push result
 
-    -- Autograde definitions 
+    -- Autograde definitions
     else if let some pts := autogradedDefAttr.getParam? sheet name then
       if not name.isInternal then
         if let some subConstInfo := submission.find? name then
           let result ← checkDefinition name pts constInfo subConstInfo sheet
           results := results.push result
-        else 
-          let result := 
-            { name, 
-              status := "failed", 
-              output := "Declaration not found in submission", 
+        else
+          let result :=
+            { name,
+              status := "failed",
+              output := "Declaration not found in submission",
               score := 0.0 }
           results := results.push result
 
@@ -282,14 +282,14 @@ def testGradeSubmission (sheet submission : Environment) : IO (Array ExerciseRes
           if let some (sheetName, expectedStatus) := autograderTestAttr.getParam? submission subName then
             if name == sheetName then
               let result ← checkProof subName pts constInfo subConstInfo sheet submission
-              if result.status == expectedStatus then 
+              if result.status == expectedStatus then
                 println! s!"Passed {subName}!"
               else
                 println! s!"Passed {subName}!"
               currResults := currResults.push result
         results := results ++ currResults
 
-    -- Check autograding of definitions 
+    -- Check autograding of definitions
     else if let some pts := autogradedDefAttr.getParam? sheet name then
       if not name.isInternal then
         let mut currResults := #[]
@@ -298,7 +298,7 @@ def testGradeSubmission (sheet submission : Environment) : IO (Array ExerciseRes
           if let some (sheetName, expectedStatus) := autograderTestAttr.getParam? submission subName then
             if name == sheetName then
               let result ← checkDefinition subName pts constInfo subConstInfo sheet
-              if result.status == expectedStatus then 
+              if result.status == expectedStatus then
                 println! s!"Passed {subName}!"
               else
                 println! s!"Passed {subName}!"
@@ -316,29 +316,35 @@ def testGradeSubmission (sheet submission : Environment) : IO (Array ExerciseRes
   return results
 
 -- Returns a tuple of (fileName, outputMessage)
-def moveFilesIntoPlace : IO (String × String) := do
+def moveFilesIntoPlace (localSubmission : Option String) : IO (String × String) := do
   -- Copy the assignment's config file to the autograder directory
   IO.FS.writeFile (agPkgPathPrefix / "autograder_config.json")
       (← IO.FS.readFile "config.json")
 
-  -- Copy the student's submission to the autograder directory. They should only
-  -- have uploaded one Lean file; if they submitted more, we pick the first
-  let submittedFiles ← submissionUploadDir.readDir
-  let leanFiles := submittedFiles.filter
-    (λ f => f.path.extension == some "lean")
-  let some leanFile := leanFiles.get? (i := 0)
-    | exitWithError <| "Your submission was not graded because it did not "
-        ++ "contain a Lean file. Make sure to upload a single .lean file "
-        ++ "containing your solutions."
-  IO.FS.writeFile submissionFileName (← IO.FS.readFile leanFile.path)
-  let output :=
-    if leanFiles.size > 1
-    then "Warning: You submitted multiple Lean files. The autograder expects "
-      ++ "you to submit a single Lean file containing your solutions, and it "
-      ++ s!"will only grade a single file. It has picked {leanFile.fileName} "
-      ++ "to grade; this may not be the file you intended to be graded.\n\n"
-    else ""
-  pure (leanFile.fileName, output)
+
+  match localSubmission with
+  | none =>
+    -- Copy the student's submission to the autograder directory. They should only
+    -- have uploaded one Lean file; if they submitted more, we pick the first
+    let submittedFiles ← submissionUploadDir.readDir
+    let leanFiles := submittedFiles.filter
+      (λ f => f.path.extension == some "lean")
+    let some leanFile := leanFiles.get? (i := 0)
+      | exitWithError <| "Your submission was not graded because it did not "
+          ++ "contain a Lean file. Make sure to upload a single .lean file "
+          ++ "containing your solutions."
+    IO.FS.writeFile submissionFileName (← IO.FS.readFile leanFile.path)
+    let output :=
+      if leanFiles.size > 1
+      then "Warning: You submitted multiple Lean files. The autograder expects "
+        ++ "you to submit a single Lean file containing your solutions, and it "
+        ++ s!"will only grade a single file. It has picked {leanFile.fileName} "
+        ++ "to grade; this may not be the file you intended to be graded.\n\n"
+      else ""
+    pure (leanFile.fileName, output)
+  | some path =>
+    IO.FS.writeFile submissionFileName (← IO.FS.readFile path)
+    pure (path, "")
 
 def getTemplateFromGitHub : IO Unit := do
   -- Read JSON config
@@ -398,18 +404,30 @@ def getErrorsStr (ml : MessageLog) : IO String := do
   let errorTxt := errors.foldl (λ acc e => acc ++ "\n" ++ e) ""
   return errorTxt
 
-unsafe def main (args : List String) : IO Unit := do
-  -- Check flags and set the grading function
-  if args != [] && args != ["--test"] then
-    exitWithError s!"Unknown argument: {args}"
+structure configData where
+  test            : Bool
+  localSubmission : Option String
+  localTemplate   : Option String
 
-  let gradeFunction := 
-    match args with
-      | ["--test"] => testGradeSubmission
-      | _ => gradeSubmission
+def parseArgsAux : configData → List String → IO configData
+| cd, [] => pure cd
+| cd, "--test"::rest => parseArgsAux { cd with test := true } rest
+| cd, "--submission"::path::rest => parseArgsAux { cd with localSubmission := some path } rest
+| cd, "--template"::path::rest => parseArgsAux { cd with localTemplate := some path } rest
+| _, s => exitWithError s!"Unknown argument: {s}"
+
+def parseArgs : List String → IO configData :=
+  parseArgsAux ⟨false, none, none⟩
+
+unsafe def main (args : List String) : IO Unit := do
+  let cfg ← parseArgs args
+  -- Check flags and set the grading function
+
+  let gradeFunction :=
+    if cfg.test then testGradeSubmission else gradeSubmission
 
   -- Get files into their appropriate locations
-  let (studentFileName, output) ← moveFilesIntoPlace
+  let (studentFileName, output) ← moveFilesIntoPlace cfg.localSubmission
   getTemplateFromGitHub
   -- We need to compile the AutograderTests directory to ensure that any
   -- libraries on which we depend get compiled (even if the sheet itself fails
