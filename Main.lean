@@ -388,6 +388,7 @@ def getErrorsStr (ml : MessageLog) : IO String := do
 
 structure ConfigData where
   test            : Bool
+  localRun        : Bool
   localSubmission : Option String
   localTemplate   : Option String
   deriving Repr
@@ -395,12 +396,11 @@ structure ConfigData where
 def parseArgsAux : ConfigData → List String → IO ConfigData
 | cd, [] => pure cd
 | cd, "--test"::rest => parseArgsAux { cd with test := true } rest
-| cd, "--submission"::path::rest => parseArgsAux { cd with localSubmission := some path } rest
-| cd, "--template"::path::rest => parseArgsAux { cd with localTemplate := some path } rest
+| cd, "--local"::submission::template::rest => parseArgsAux { cd with localSubmission := some submission, localTemplate := some template } rest
 | _, s => exitWithError s!"Unknown argument: {s}"
 
 def parseArgs : List String → IO ConfigData :=
-  parseArgsAux ⟨false, none, none⟩
+  parseArgsAux ⟨false, false, none, none⟩
 
 unsafe def main (args : List String) : IO Unit := do
   let cfg ← parseArgs args
@@ -415,7 +415,8 @@ unsafe def main (args : List String) : IO Unit := do
   -- We need to compile the AutograderTests directory to ensure that any
   -- libraries on which we depend get compiled (even if the sheet itself fails
   -- to compile)
-  compileAutograder
+
+  if !cfg.localRun then compileAutograder
 
   -- -- Import the template (as a module, since it is known to compile)
   -- let sheetName := s!"{solutionDirName}.{solutionModuleName}".toName
