@@ -396,7 +396,7 @@ structure ConfigData where
 def parseArgsAux : ConfigData → List String → IO ConfigData
 | cd, [] => pure cd
 | cd, "--test"::rest => parseArgsAux { cd with test := true } rest
-| cd, "--local"::submission::template::rest => parseArgsAux { cd with localSubmission := some submission, localTemplate := some template } rest
+| cd, "--local"::submission::template::rest => parseArgsAux { cd with localRun := true, localSubmission := some submission, localTemplate := some template } rest
 | _, s => exitWithError s!"Unknown argument: {s}"
 
 def parseArgs : List String → IO ConfigData :=
