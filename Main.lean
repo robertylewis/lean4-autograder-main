@@ -318,8 +318,8 @@ def testGradeSubmission (sheet submission : Environment) : IO (Array ExerciseRes
 -- Returns a tuple of (fileName, outputMessage)
 def moveFilesIntoPlace (localSubmission : Option String) : IO (String × String) := do
   -- Copy the assignment's config file to the autograder directory
-  IO.FS.writeFile (agPkgPathPrefix / "autograder_config.json")
-      (← IO.FS.readFile "config.json")
+  -- IO.FS.writeFile (agPkgPathPrefix / "autograder_config.json")
+  --     (← IO.FS.readFile "config.json")
 
 
   match localSubmission with
@@ -346,43 +346,25 @@ def moveFilesIntoPlace (localSubmission : Option String) : IO (String × String)
     IO.FS.writeFile submissionFileName (← IO.FS.readFile path)
     pure (path, "")
 
-def getTemplateFromGitHub : IO Unit := do
-  -- Read JSON config
-  let configRaw ← IO.FS.readFile (agPkgPathPrefix / "autograder_config.json")
-  let studentErrorText :=
-    "The autograder failed to run because it is incorrectly configured. Please "
-      ++ "notify your instructor of this error and provide them with a link to "
-      ++ "your submission."
-  let config ←
-    try
-      IO.ofExcept <| Json.parse configRaw
-    catch _ =>
-      exitWithError studentErrorText "Invalid JSON in autograder.json"
-  if ← sheetFile.pathExists then FS.removeFile sheetFile
-  -- let repoURLPath ← IO.ofExcept <| config.getObjValAs? String "autograder_repo"
-  -- let some repoName := (repoURLPath.splitOn "/").getLast?
-  --   | exitWithError studentErrorText "Invalid autograder_repo in autograder.json"
+def moveTemplateIntoPlace (localTemplate : Option String) : IO Unit := do
+  let assignmentPath ←
+    match localTemplate with
+    | none =>
+      let configRaw ← IO.FS.readFile "config.json"
+      let studentErrorText :=
+        "The autograder failed to run because it is incorrectly configured. Please "
+          ++ "notify your instructor of this error and provide them with a link to "
+          ++ "your submission."
+      let config ←
+        try
+          IO.ofExcept <| Json.parse configRaw
+        catch _ =>
+          exitWithError studentErrorText "Invalid JSON in autograder.json"
+      if ← sheetFile.pathExists then FS.removeFile sheetFile
+      IO.ofExcept <| config.getObjValAs? String "assignment_path"
 
-  -- -- Download the repo
-  -- let repoLocalPath : FilePath := agPkgPathPrefix / repoName
-  -- let out ← IO.Process.output {
-  --   cmd := "git"
-  --   args := #["clone", s!"git@github.com:{repoURLPath}",
-  --             repoLocalPath.toString]
-  -- }
-  -- if out.exitCode != 0 then
-  --   exitWithError <|
-  --     "The autograder failed to run due to an issue retrieving the assignment. "
-  --       ++ "Try resubmitting in a few minutes. If the problem persists, "
-  --       ++ "contact your instructor and provide them with a link to this "
-  --       ++ "submission."
-
-  -- Move the assignment to the correct location; delete the cloned repo
-  let assignmentPath ← IO.ofExcept <|
-    config.getObjValAs? String "assignment_path"
-  -- let curAsgnFilePath : FilePath := agPkgPathPrefix / repoName / assignmentPath
-  IO.FS.rename assignmentPath sheetFile
-  -- IO.FS.removeDirAll repoLocalPath
+    | some path => pure path
+  IO.FS.writeFile sheetFile (← IO.FS.readFile assignmentPath)
 
 def compileAutograder : IO Unit := do
   -- Compile the autograder so we get all our deps, even if the sheet itself
@@ -404,19 +386,20 @@ def getErrorsStr (ml : MessageLog) : IO String := do
   let errorTxt := errors.foldl (λ acc e => acc ++ "\n" ++ e) ""
   return errorTxt
 
-structure configData where
+structure ConfigData where
   test            : Bool
   localSubmission : Option String
   localTemplate   : Option String
+  deriving Repr
 
-def parseArgsAux : configData → List String → IO configData
+def parseArgsAux : ConfigData → List String → IO ConfigData
 | cd, [] => pure cd
 | cd, "--test"::rest => parseArgsAux { cd with test := true } rest
 | cd, "--submission"::path::rest => parseArgsAux { cd with localSubmission := some path } rest
 | cd, "--template"::path::rest => parseArgsAux { cd with localTemplate := some path } rest
 | _, s => exitWithError s!"Unknown argument: {s}"
 
-def parseArgs : List String → IO configData :=
+def parseArgs : List String → IO ConfigData :=
   parseArgsAux ⟨false, none, none⟩
 
 unsafe def main (args : List String) : IO Unit := do
@@ -428,7 +411,7 @@ unsafe def main (args : List String) : IO Unit := do
 
   -- Get files into their appropriate locations
   let (studentFileName, output) ← moveFilesIntoPlace cfg.localSubmission
-  getTemplateFromGitHub
+  moveTemplateIntoPlace cfg.localTemplate
   -- We need to compile the AutograderTests directory to ensure that any
   -- libraries on which we depend get compiled (even if the sheet itself fails
   -- to compile)
