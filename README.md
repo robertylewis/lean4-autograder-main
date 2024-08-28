@@ -66,7 +66,7 @@ def reverse {α : Type} : List α → List α
 
 While the autograder is designed to be used with Gradescope, you can test it locally.
 
-The `[@autograderTest status name]` attribue can be used to test multiple possible solutiosn to a problem at once.
+The `[@autograderTest status name]` attribue can be used to test multiple possible solutions to a problem at once.
 The `status` paramenter is the expected status of the test and should be either `passes` or `fails`.
 The `name` parameter is the name of the problem in the solutions files. 
 
@@ -102,3 +102,9 @@ def reverse3 {α : Type} : List α → List α
   | List.nil        => List.nil
   | List.cons x xs  => List.append [x] (reverse3 xs)
 ```
+
+For an alternate way to test, run:
+```lake exe autograder --local path/to/submission.lean path/to/solutions.lean```
+
+Right now this will save the results in `../results/results.json`,
+or error if this directory doesn't exist. Fixing this is a todo!

@@ -483,5 +483,8 @@ unsafe def main (args : List String) : IO Unit := do
   IO.println <| os.foldl (·++·) ""
 
   let tests ← gradeFunction sheet submissionEnv
+
+  -- TODO: if `cfg.localRun` is true, print these results instead of saving to json
+
   let results : GradingResults := { tests, output }
   IO.FS.writeFile resultsJsonPath (toJson results).pretty
