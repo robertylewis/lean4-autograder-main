@@ -353,30 +353,30 @@ def getTemplateFromGitHub : IO Unit := do
     catch _ =>
       exitWithError studentErrorText "Invalid JSON in autograder.json"
   if ← sheetFile.pathExists then FS.removeFile sheetFile
-  let repoURLPath ← IO.ofExcept <| config.getObjValAs? String "autograder_repo"
-  let some repoName := (repoURLPath.splitOn "/").getLast?
-    | exitWithError studentErrorText "Invalid autograder_repo in autograder.json"
+  -- let repoURLPath ← IO.ofExcept <| config.getObjValAs? String "autograder_repo"
+  -- let some repoName := (repoURLPath.splitOn "/").getLast?
+  --   | exitWithError studentErrorText "Invalid autograder_repo in autograder.json"
 
-  -- Download the repo
-  let repoLocalPath : FilePath := agPkgPathPrefix / repoName
-  let out ← IO.Process.output {
-    cmd := "git"
-    args := #["clone", s!"https://github.com/{repoURLPath}",
-              repoLocalPath.toString]
-  }
-  if out.exitCode != 0 then
-    exitWithError <|
-      "The autograder failed to run due to an issue retrieving the assignment. "
-        ++ "Try resubmitting in a few minutes. If the problem persists, "
-        ++ "contact your instructor and provide them with a link to this "
-        ++ "submission."
+  -- -- Download the repo
+  -- let repoLocalPath : FilePath := agPkgPathPrefix / repoName
+  -- let out ← IO.Process.output {
+  --   cmd := "git"
+  --   args := #["clone", s!"git@github.com:{repoURLPath}",
+  --             repoLocalPath.toString]
+  -- }
+  -- if out.exitCode != 0 then
+  --   exitWithError <|
+  --     "The autograder failed to run due to an issue retrieving the assignment. "
+  --       ++ "Try resubmitting in a few minutes. If the problem persists, "
+  --       ++ "contact your instructor and provide them with a link to this "
+  --       ++ "submission."
 
   -- Move the assignment to the correct location; delete the cloned repo
   let assignmentPath ← IO.ofExcept <|
     config.getObjValAs? String "assignment_path"
-  let curAsgnFilePath : FilePath := agPkgPathPrefix / repoName / assignmentPath
-  IO.FS.rename curAsgnFilePath sheetFile
-  IO.FS.removeDirAll repoLocalPath
+  -- let curAsgnFilePath : FilePath := agPkgPathPrefix / repoName / assignmentPath
+  IO.FS.rename assignmentPath sheetFile
+  -- IO.FS.removeDirAll repoLocalPath
 
 def compileAutograder : IO Unit := do
   -- Compile the autograder so we get all our deps, even if the sheet itself
