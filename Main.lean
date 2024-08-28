@@ -2,7 +2,7 @@ import Lean
 import AutograderLib
 -- Ensures Mathlib is compiled when the container is being uploaded:
 -- import Mathlib
-open Lean IO System Elab Command
+open Lean IO System Elab Command Meta Lean.Meta Lean.Elab.Tactic
 
 -- Don't change these
 def agPkgPathPrefix : FilePath := ".lake" / "packages" / "autograder"
@@ -16,8 +16,8 @@ def submissionFileName := "Assignment.lean"
 -- These are generated based on the above
 def sheetModuleName := s!"{solutionDirName}.{solutionModuleName}".toName
 def sheetFileName := s!"{solutionModuleName}.lean"
-def sheetFile : FilePath :=
-  agPkgPathPrefix / solutionDirName / sheetFileName
+-- ".lake/packages/autograder/AutograderTests/AutograderTests.Solution.lean"
+def sheetFile : FilePath := agPkgPathPrefix / solutionDirName / sheetFileName
 
 -- Used for non-exercise-specific results (e.g., global failures)
 structure FailureResult where
@@ -73,6 +73,12 @@ def findInvalidAxiom (submissionAxioms : List Name)
       return ax
   none
 
+-- Source: aesop/Aesop/Util/Basic.lean
+def runTacticMAsMetaM {α : Type} (tactic : TacticM α) (goals : List MVarId) :
+    MetaM (α × List MVarId) := do
+  let (a, s) ← tactic |>.run { elaborator := .anonymous } |>.run { goals } |>.run'
+  return (a, s.goals)
+
 -- Ideally, we could format our Gradescope output nicely as HTML and escape
 -- inserted file names/error messages/etc. Unfortunately, Gradescope doesn't
 -- handle pre-escaped HTML well (it tries to re-escape it), so until a
@@ -89,63 +95,170 @@ def exitWithError {α} (errMsg : String) (instructorInfo: String := "")
   IO.FS.writeFile resultsJsonPath (toJson result).pretty
   throw <| IO.userError (errMsg ++ "\n" ++ instructorInfo)
 
-def gradeSubmission (sheet submission : Environment)
-  : IO (Array ExerciseResult) := do
+def checkDefinition (name : Name) (pts : Float) (constInfo subConstInfo : ConstantInfo) 
+  (sheet : Environment) : IO ExerciseResult := do
+    -- Get the list of tactics for the problem
+    let tactics :=
+      if let some t := validTacticsAttr.getParam? sheet name then t 
+      else if let some d := defaultTacticsAttr.getParam? sheet `setDefaultTactics then d
+      else #[] 
+
+    -- * Ensure declaration doesn't use `sorry`
+    if subConstInfo.value?.any (·.hasSorry) then
+      pure { name,
+             status := "failed",
+             output := "Definition contains sorry",
+             score := 0.0 }
+    -- * Ensure declaration type matches sheet
+    else if not (constInfo.type == subConstInfo.type) then
+        pure { name,
+               status := "failed",
+               output := "Type is different from expected: "
+                          ++ s!"{constInfo.type} does not match "
+                          ++ s!"{subConstInfo.type}",
+               score := 0.0 }
+    -- * Submitted declaration must match the soundness of the sheet decl
+    else if (subConstInfo.isUnsafe && ! constInfo.isUnsafe) ||
+            (subConstInfo.isPartial && ! constInfo.isPartial) then
+      pure { name,
+              status := "failed",
+              output := "Declaration is partial or unsafe",
+              score := 0.0 }
+    else if (!subConstInfo.hasValue) then
+      pure { name,
+             status := "failed",
+             score := 0.0,
+             output := "Definition does not contain a value" }
+    else if (subConstInfo.value!.equal constInfo.value!) then
+      pure { name,
+             status := "passed",
+             score := pts,
+             output := "Marked as equal" }
+    else if (subConstInfo.value!.eqv constInfo.value!) then
+      pure { name,
+             status := "passed",
+             score := pts,
+             output := "Marked as equivalent" }
+    else
+      let sheetExpr := constInfo.value!
+      let subExpr := subConstInfo.value!
+
+      -- Run tactics to prove equality
+      let checkEquality : MetaM ExerciseResult := do
+        -- Create a goal to prove that the two expressions are equal
+        let eqExpr ← mkEq sheetExpr subExpr
+        let mvar ← mkFreshExprMVar (some eqExpr)
+        let mvarId := mvar.mvarId!
+
+        -- Try refl and hrefl
+        try mvarId.refl; 
+            return { name,
+                     status := "passed",
+                     output := "Proven to be equivalent by refl",
+                     score := pts }
+        catch _ => pure ()
+
+        try mvarId.hrefl; 
+            return { name,
+                     status := "passed",
+                     output := "Proven to be equivalent by hrefl",
+                     score := pts }
+        catch _ => pure ()
+
+        -- Run tactics to prove equality
+        -- TODO: check if there is backtracking after the tactic is applied 
+        for (tacName, tac) in tactics do
+          let (_, goals) ← runTacticMAsMetaM (try tac catch _ => pure ()) [mvarId]
+          if goals.isEmpty then 
+            return { name,
+                     status := "passed",
+                     output := s!"Proven to be equivalent by {tacName}",
+                     score := pts }
+
+        return { name, 
+                 status := "failed", 
+                 score := 0.0, 
+                 output := "Not marked as equivalent" }
+
+      let ctx : Core.Context := { fileName := "", fileMap := default }
+      let cstate : Core.State := { env := sheet }
+      let (proved?, _, _ ) ← MetaM.toIO checkEquality ctx cstate
+      return proved?
+
+def checkProof (name : Name) (pts : Float) (constInfo subConstInfo : ConstantInfo) 
+  (sheet submission : Environment) : IO ExerciseResult := do
+    -- Gather axioms in submitted declaration
+    let (_, submissionState) := 
+          ((CollectAxioms.collect name).run submission).run {}
+
+    -- Tests:
+    -- * Ensure declaration doesn't use `sorry` (separate from other
+    --   axioms since it's especially common)
+    if subConstInfo.value?.any (·.hasSorry) then
+      pure { name,
+             status := "failed",
+             output := "Proof contains sorry",
+             score := 0.0 }
+    -- * Ensure declaration type matches sheet
+    else if not (constInfo.type == subConstInfo.type) then
+        pure { name,
+               status := "failed",
+               output := "Type is different from expected: "
+                          ++ s!"{constInfo.type} does not match "
+                          ++ s!"{subConstInfo.type}",
+               score := 0.0 }
+    -- * Submitted declaration must use only legal axioms
+    else if let some badAx := 
+      findInvalidAxiom submissionState.axioms.toList sheet submission 
+    then
+      pure { name,
+              status := "failed",
+              output := s!"Uses unexpected axiom {badAx}",
+              score := 0.0 }
+    -- * Submitted declaration must match the soundness of the sheet decl
+    else if (subConstInfo.isUnsafe && ! constInfo.isUnsafe) ||
+            (subConstInfo.isPartial && ! constInfo.isPartial) then
+      pure { name,
+              status := "failed",
+              output := "Declaration is partial or unsafe",
+              score := 0.0 }
+    else
+      pure { name,
+              status := "passed",
+              score := pts,
+              output := "Passed all tests" }
+
+def gradeSubmission (sheet submission : Environment) : IO (Array ExerciseResult) := do
   let mut results := #[]
 
-  for constEntry in sheet.constants.toList do
-    let (name, constInfo) := constEntry
-    -- Only consider annotated, non-internal declarations
-    if let some pts := problemAttr.getParam? sheet name then
-    if not name.isInternal then
-      let result ←
-        -- exercise to be filled in
+  for (name, constInfo) in sheet.constants.toList do
+    -- Autograde proofs 
+    if let some pts := autogradedProofAttr.getParam? sheet name then
+        if not name.isInternal then
+          if let some subConstInfo := submission.find? name then
+              let result ← checkProof name pts constInfo subConstInfo sheet submission
+              results := results.push result
+            else
+              let result := 
+                { name,
+                  status := "failed",
+                  output := "Declaration not found in submission",
+                  score := 0.0 }
+              results := results.push result
+
+    -- Autograde definitions 
+    else if let some pts := autogradedDefAttr.getParam? sheet name then
+      if not name.isInternal then
         if let some subConstInfo := submission.find? name then
-          -- Gather axioms in submitted declaration
-          let (_, submissionState) :=
-                ((CollectAxioms.collect name).run submission).run {}
-          -- Tests:
-          -- * Ensure declaration doesn't use `sorry` (separate from other
-          --   axioms since it's especially common)
-          if subConstInfo.value?.any (·.hasSorry) then
-            pure { name,
-                   status := "failed",
-                   output := "Proof contains sorry",
-                   score := 0.0 }
-          -- * Ensure declaration type matches sheet
-          else if not (constInfo.type == subConstInfo.type) then
-              pure { name,
-                     status := "failed",
-                     output := "Type is different from expected: "
-                                ++ s!"{constInfo.type} does not match "
-                                ++ s!"{subConstInfo.type}",
-                     score := 0.0 }
-          -- * Submitted declaration must use only legal axioms
-          else if let some badAx :=
-            findInvalidAxiom submissionState.axioms.toList sheet submission
-          then
-            pure { name,
-                    status := "failed",
-                    output := s!"Uses unexpected axiom {badAx}",
-                    score := 0.0 }
-          -- * Submitted declaration must match the soundness of the sheet decl
-          else if (subConstInfo.isUnsafe && ! constInfo.isUnsafe) ||
-                  (subConstInfo.isPartial && ! constInfo.isPartial) then
-            pure { name,
-                    status := "failed",
-                    output := "Declaration is partial or unsafe",
-                    score := 0.0 }
-          else
-            pure { name,
-                    status := "passed",
-                    score := pts,
-                    output := "Passed all tests" }
-        else
-          pure { name,
-                 status := "failed",
-                 output := "Declaration not found in submission",
-                 score := 0.0 }
-      results := results.push result
+          let result ← checkDefinition name pts constInfo subConstInfo sheet
+          results := results.push result
+        else 
+          let result := 
+            { name, 
+              status := "failed", 
+              output := "Declaration not found in submission", 
+              score := 0.0 }
+          results := results.push result
 
   -- Gradescope will not accept an empty tests list, and this most likely
   -- indicates a misconfiguration anyway
@@ -154,6 +267,52 @@ def gradeSubmission (sheet submission : Environment)
         ++ "because no exercises have been marked as graded by your "
         ++ "instructor. Please notify your instructor of this error and "
         ++ "provide them with a link to this submission."
+
+  return results
+
+def testGradeSubmission (sheet submission : Environment) : IO (Array ExerciseResult) := do
+  let mut results := #[]
+  for (name, constInfo) in sheet.constants.toList do
+    -- Check autograding of proofs
+    if let some pts := autogradedProofAttr.getParam? sheet name then
+      if not name.isInternal then
+        let mut currResults := #[]
+        -- Check every submission constant that is labeled as a test for the current sheet constant
+        for (subName, subConstInfo) in submission.constants.toList do
+          if let some (sheetName, expectedStatus) := autograderTestAttr.getParam? submission subName then
+            if name == sheetName then
+              let result ← checkProof subName pts constInfo subConstInfo sheet submission
+              if result.status == expectedStatus then 
+                println! s!"Passed {subName}!"
+              else
+                println! s!"Passed {subName}!"
+              currResults := currResults.push result
+        results := results ++ currResults
+
+    -- Check autograding of definitions 
+    else if let some pts := autogradedDefAttr.getParam? sheet name then
+      if not name.isInternal then
+        let mut currResults := #[]
+        -- Check every submission constant that is labeled as a test for the current sheet constant
+        for (subName, subConstInfo) in submission.constants.toList do
+          if let some (sheetName, expectedStatus) := autograderTestAttr.getParam? submission subName then
+            if name == sheetName then
+              let result ← checkDefinition subName pts constInfo subConstInfo sheet
+              if result.status == expectedStatus then 
+                println! s!"Passed {subName}!"
+              else
+                println! s!"Passed {subName}!"
+              currResults := currResults.push result
+        results := results ++ currResults
+
+  -- Gradescope will not accept an empty tests list, and this most likely
+  -- indicates a misconfiguration anyway
+  if results.size == 0 then
+    exitWithError <| "The autograder is unable to grade your submission "
+        ++ "because no exercises have been marked as graded by your "
+        ++ "instructor. Please notify your instructor of this error and "
+        ++ "provide them with a link to this submission."
+
   return results
 
 -- Returns a tuple of (fileName, outputMessage)
@@ -239,7 +398,16 @@ def getErrorsStr (ml : MessageLog) : IO String := do
   let errorTxt := errors.foldl (λ acc e => acc ++ "\n" ++ e) ""
   return errorTxt
 
-unsafe def main : IO Unit := do
+unsafe def main (args : List String) : IO Unit := do
+  -- Check flags and set the grading function
+  if args != [] && args != ["--test"] then
+    exitWithError s!"Unknown argument: {args}"
+
+  let gradeFunction := 
+    match args with
+      | ["--test"] => testGradeSubmission
+      | _ => gradeSubmission
+
   -- Get files into their appropriate locations
   let (studentFileName, output) ← moveFilesIntoPlace
   getTemplateFromGitHub
@@ -312,6 +480,6 @@ unsafe def main : IO Unit := do
   let os ← messages.toList.mapM (λ m => m.toString)
   IO.println <| os.foldl (·++·) ""
 
-  let tests ← gradeSubmission sheet submissionEnv
+  let tests ← gradeFunction sheet submissionEnv
   let results : GradingResults := { tests, output }
   IO.FS.writeFile resultsJsonPath (toJson results).pretty
