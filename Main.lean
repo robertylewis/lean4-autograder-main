@@ -33,9 +33,15 @@ structure ExerciseResult where
   status : String
   deriving ToJson
 
+
 def ExerciseResult.print (er : ExerciseResult) : IO Unit := do
+  let score :=
+    match JsonNumber.fromFloat? er.score with
+    | Sum.inl e => Json.str e
+    | Sum.inr n => Json.num n
   IO.println s!"{er.name}:"
-  IO.println s!"  {er.status} ({er.score} points)"
+  IO.println s!"  {er.status} ({score} points)"
+  IO.println s!"  {er.output}"
 
 structure GradingResults where
   tests : Array ExerciseResult
