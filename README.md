@@ -16,14 +16,17 @@ This project is meant to work with MathLib assignments, so for a good Gradescope
 Otherwise, you'll get inscrutable errors when it runs out of memory. 
 Students will only need to submit a file to Gradescope.
 
-Note that it is **NOT** necessary to edit `autograder_config.json` unless you want to use the helper scripts.
-
 For an example, see the submissions repository [fpv2023](https://github.com/BrownCS1951x/fpv2023). 
 The lakefile of this project imports this autograder project.
 To create a Gradescope assignment for HW1, I would edit the configuration file in the autograder shell 
 to point at `Homeworks/Homework1.lean` in that repository, run the `make_autograder.sh` script, 
 and upload the resulting zip file to Gradescope.
 Students would then submit *only* their `Homework1.lean` file to Gradescope.
+
+**Temporary note:** If you are not using the "private solutions repository" feature with a deploy key as explained in the shell repository,
+you will not be able to use the latest version of this autograder.
+We are looking for a workaround.
+In the meantime, use the commit [7b389cac593fa1881f07916ff9818b208a958eef](https://github.com/robertylewis/lean4-autograder-main/tree/7b389cac593fa1881f07916ff9818b208a958eef) and corresponding version of the shell.
 
 ## Autograding 
 
