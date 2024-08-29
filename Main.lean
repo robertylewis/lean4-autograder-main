@@ -33,11 +33,21 @@ structure ExerciseResult where
   status : String
   deriving ToJson
 
+def ExerciseResult.print (er : ExerciseResult) : IO Unit := do
+  IO.println s!"{er.name}:"
+  IO.println s!"  {er.status} ({er.score} points)"
+
 structure GradingResults where
   tests : Array ExerciseResult
   output: String
   output_format: String := "text"
   deriving ToJson
+
+def GradingResults.print (gr : GradingResults) : IO Unit := do
+  IO.println gr.output
+  for er in gr.tests do
+    er.print
+    IO.println ""
 
 def Lean.Environment.moduleDataOf? (module : Name) (env : Environment)
   : Option ModuleData := do
@@ -487,4 +497,6 @@ unsafe def main (args : List String) : IO Unit := do
   -- TODO: if `cfg.localRun` is true, print these results instead of saving to json
 
   let results : GradingResults := { tests, output }
+
+  if cfg.localRun then results.print else
   IO.FS.writeFile resultsJsonPath (toJson results).pretty
