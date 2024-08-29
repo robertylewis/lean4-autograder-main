@@ -104,5 +104,3 @@ def reverse3 {α : Type} : List α → List α
 For an alternate way to test, run:
 ```lake exe autograder --local path/to/submission.lean path/to/solutions.lean```
 
-Right now this will save the results in `../results/results.json`,
-or error if this directory doesn't exist. Fixing this is a todo!
