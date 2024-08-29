@@ -23,11 +23,6 @@ to point at `Homeworks/Homework1.lean` in that repository, run the `make_autogra
 and upload the resulting zip file to Gradescope.
 Students would then submit *only* their `Homework1.lean` file to Gradescope.
 
-**Temporary note:** If you are not using the "private solutions repository" feature with a deploy key as explained in the shell repository,
-you will not be able to use the latest version of this autograder.
-We are looking for a workaround.
-In the meantime, use the commit [7b389cac593fa1881f07916ff9818b208a958eef](https://github.com/robertylewis/lean4-autograder-main/tree/7b389cac593fa1881f07916ff9818b208a958eef) and corresponding version of the shell.
-
 ## Autograding 
 
 The two main attributes are `@[autogradedProof pts]` and `@[autogradedDef pts]`.
