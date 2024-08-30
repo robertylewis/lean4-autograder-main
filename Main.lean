@@ -111,7 +111,7 @@ def exitWithError {α} (errMsg : String) (instructorInfo: String := "")
   IO.FS.writeFile resultsJsonPath (toJson result).pretty
   throw <| IO.userError (errMsg ++ "\n" ++ instructorInfo)
 
-def checkDefinition (name : Name) (pts : Float) (constInfo subConstInfo : ConstantInfo)
+def checkDefinition (name subName : Name) (pts : Float) (constInfo subConstInfo : ConstantInfo)
   (sheet : Environment) : IO ExerciseResult := do
     -- Get the list of tactics for the problem
     let tactics :=
@@ -121,13 +121,13 @@ def checkDefinition (name : Name) (pts : Float) (constInfo subConstInfo : Consta
 
     -- * Ensure declaration doesn't use `sorry`
     if subConstInfo.value?.any (·.hasSorry) then
-      pure { name,
+      pure { name := subName,
              status := "failed",
-             output := "Definition contains sorry",
+             output := "Declaration contains sorry",
              score := 0.0 }
     -- * Ensure declaration type matches sheet
     else if not (constInfo.type == subConstInfo.type) then
-        pure { name,
+        pure { name := subName,
                status := "failed",
                output := "Type is different from expected: "
                           ++ s!"{constInfo.type} does not match "
@@ -136,25 +136,29 @@ def checkDefinition (name : Name) (pts : Float) (constInfo subConstInfo : Consta
     -- * Submitted declaration must match the soundness of the sheet decl
     else if (subConstInfo.isUnsafe && ! constInfo.isUnsafe) ||
             (subConstInfo.isPartial && ! constInfo.isPartial) then
-      pure { name,
+      pure { name := subName,
               status := "failed",
               output := "Declaration is partial or unsafe",
               score := 0.0 }
     else if (!subConstInfo.hasValue) then
-      pure { name,
+      pure { name := subName,
              status := "failed",
              score := 0.0,
-             output := "Definition does not contain a value" }
+             output := "Declaration does not contain a value" }
     else if (subConstInfo.value!.equal constInfo.value!) then
-      pure { name,
+      pure { name := subName,
              status := "passed",
              score := pts,
-             output := "Marked as equal" }
+             output := "Marked as equal" 
+             -- output := "Passed all tests" 
+             }
     else if (subConstInfo.value!.eqv constInfo.value!) then
-      pure { name,
+      pure { name := subName,
              status := "passed",
              score := pts,
-             output := "Marked as equivalent" }
+             output := "Marked as equivalent" 
+             -- output := "Passed all tests" 
+             }
     else
       let sheetExpr := constInfo.value!
       let subExpr := subConstInfo.value!
@@ -168,16 +172,18 @@ def checkDefinition (name : Name) (pts : Float) (constInfo subConstInfo : Consta
 
         -- Try refl and hrefl
         try mvarId.refl;
-            return { name,
+            return { name := subName,
                      status := "passed",
-                     output := "Proven to be equivalent by refl",
+                     output := "Proven equal by refl",
+                     -- output := "Passed all tests",
                      score := pts }
         catch _ => pure ()
 
         try mvarId.hrefl;
-            return { name,
+            return { name := subName,
                      status := "passed",
-                     output := "Proven to be equivalent by hrefl",
+                     output := "Proven equal by hrefl",
+                     -- output := "Passed all tests",
                      score := pts }
         catch _ => pure ()
 
@@ -186,22 +192,24 @@ def checkDefinition (name : Name) (pts : Float) (constInfo subConstInfo : Consta
         for (tacName, tac) in tactics do
           let (_, goals) ← runTacticMAsMetaM (try tac catch _ => pure ()) [mvarId]
           if goals.isEmpty then
-            return { name,
+            return { name := subName,
                      status := "passed",
-                     output := s!"Proven to be equivalent by {tacName}",
+                     -- output := "Passed all tests",
+                     output := s!"Proven equal by {tacName}",
                      score := pts }
 
-        return { name,
+        return { name := subName,
                  status := "failed",
                  score := 0.0,
-                 output := "Not marked as equivalent" }
+                 output := "Not found to be equal" }
 
       let ctx : Core.Context := { fileName := "", fileMap := default }
       let cstate : Core.State := { env := sheet }
       let (proved?, _, _ ) ← MetaM.toIO checkEquality ctx cstate
       return proved?
 
-def checkProof (name : Name) (pts : Float) (constInfo subConstInfo : ConstantInfo)
+def checkProof (name subName : Name) (pts : Float) 
+  (constInfo subConstInfo : ConstantInfo)
   (sheet submission : Environment) : IO ExerciseResult := do
     -- Gather axioms in submitted declaration
     let (_, submissionState) :=
@@ -252,7 +260,7 @@ def gradeSubmission (sheet submission : Environment) : IO (Array ExerciseResult)
     if let some pts := autogradedProofAttr.getParam? sheet name then
         if not name.isInternal then
           if let some subConstInfo := submission.find? name then
-              let result ← checkProof name pts constInfo subConstInfo sheet submission
+              let result ← checkProof name name pts constInfo subConstInfo sheet submission
               results := results.push result
             else
               let result :=
@@ -266,7 +274,7 @@ def gradeSubmission (sheet submission : Environment) : IO (Array ExerciseResult)
     else if let some pts := autogradedDefAttr.getParam? sheet name then
       if not name.isInternal then
         if let some subConstInfo := submission.find? name then
-          let result ← checkDefinition name pts constInfo subConstInfo sheet
+          let result ← checkDefinition name name pts constInfo subConstInfo sheet
           results := results.push result
         else
           let result :=
@@ -288,6 +296,7 @@ def gradeSubmission (sheet submission : Environment) : IO (Array ExerciseResult)
 
 def testGradeSubmission (sheet submission : Environment) : IO (Array ExerciseResult) := do
   let mut results := #[]
+
   for (name, constInfo) in sheet.constants.toList do
     -- Check autograding of proofs
     if let some pts := autogradedProofAttr.getParam? sheet name then
@@ -297,11 +306,7 @@ def testGradeSubmission (sheet submission : Environment) : IO (Array ExerciseRes
         for (subName, subConstInfo) in submission.constants.toList do
           if let some (sheetName, expectedStatus) := autograderTestAttr.getParam? submission subName then
             if name == sheetName then
-              let result ← checkProof subName pts constInfo subConstInfo sheet submission
-              if result.status == expectedStatus then
-                println! s!"Passed {subName}!"
-              else
-                println! s!"Passed {subName}!"
+              let result ← checkProof name subName pts constInfo subConstInfo sheet submission
               currResults := currResults.push result
         results := results ++ currResults
 
@@ -313,11 +318,7 @@ def testGradeSubmission (sheet submission : Environment) : IO (Array ExerciseRes
         for (subName, subConstInfo) in submission.constants.toList do
           if let some (sheetName, expectedStatus) := autograderTestAttr.getParam? submission subName then
             if name == sheetName then
-              let result ← checkDefinition subName pts constInfo subConstInfo sheet
-              if result.status == expectedStatus then
-                println! s!"Passed {subName}!"
-              else
-                println! s!"Passed {subName}!"
+              let result ← checkDefinition name subName pts constInfo subConstInfo sheet
               currResults := currResults.push result
         results := results ++ currResults
 
@@ -502,5 +503,5 @@ unsafe def main (args : List String) : IO Unit := do
 
   let results : GradingResults := { tests, output }
 
-  if cfg.localRun then results.print else
-  IO.FS.writeFile resultsJsonPath (toJson results).pretty
+  if cfg.localRun then results.print 
+  else IO.FS.writeFile resultsJsonPath (toJson results).pretty
