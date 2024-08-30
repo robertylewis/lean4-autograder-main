@@ -2,7 +2,7 @@
 
 This project provides a Lean 4 autograder that works with [Gradescope](https://gradescope-autograders.readthedocs.io/en/latest/). 
 It checks that students have provided correct proof terms or have created the correct `Expr` up to definitional equality. 
-This includes theorems, funcitons, propositions, and instances. 
+This includes theorems, functions, propositions, and instances. 
 
 The autograder does *not* use test cases. Additionally, it cannot grade inductive types or structures.
 
@@ -63,11 +63,11 @@ def reverse {α : Type} : List α → List α
 ## Testing the Autograder
 
 While the autograder is designed to be used with Gradescope, you can test it locally.
+Run ```lake exe autograder --local path/to/submission.lean path/to/solutions.lean```.
 
-The `[@autograderTest status name]` attribue can be used to test multiple possible solutions to a problem at once.
-The `status` paramenter is the expected status of the test and should be either `passes` or `fails`.
+The `[@autograderTest status name]` attribute can be used to test multiple possible solutions to a problem at once.
+The `status` paramenter is the expected status of the test and should either be `passes` or `fails`.
 The `name` parameter is the name of the problem in the solutions files. 
-
 After setting up the solution and test files, you can run the autograder with the following command: `lake exe autograder --test`.
 
 Here is an example of a solution and test file for the `reverse` function.
@@ -100,7 +100,3 @@ def reverse3 {α : Type} : List α → List α
   | List.nil        => List.nil
   | List.cons x xs  => List.append [x] (reverse3 xs)
 ```
-
-For an alternate way to test, run:
-```lake exe autograder --local path/to/submission.lean path/to/solutions.lean```
-
