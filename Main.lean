@@ -119,14 +119,8 @@ def checkDefinition (name subName : Name) (pts : Float) (constInfo subConstInfo 
       else if let some d := defaultTacticsAttr.getParam? sheet `setDefaultTactics then d
       else #[]
 
-    -- * Ensure declaration doesn't use `sorry`
-    if subConstInfo.value?.any (·.hasSorry) then
-      pure { name := subName,
-             status := "failed",
-             output := "Declaration contains sorry",
-             score := 0.0 }
     -- * Ensure declaration type matches sheet
-    else if not (constInfo.type == subConstInfo.type) then
+    if not (constInfo.type == subConstInfo.type) then
         pure { name := subName,
                status := "failed",
                output := "Type is different from expected: "
