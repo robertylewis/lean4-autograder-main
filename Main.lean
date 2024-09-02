@@ -1,4 +1,4 @@
-import Lean
+import Lean 
 import AutograderLib
 -- Ensures Mathlib is compiled when the container is being uploaded:
 -- import Mathlib
@@ -26,13 +26,13 @@ structure FailureResult where
   output_format : String := "text"
   deriving ToJson
 
+-- Used for exercise-specific results
 structure ExerciseResult where
-  score : Float
-  output : String
   name : Name
+  score : Float
   status : String
+  output : String
   deriving ToJson
-
 
 def ExerciseResult.print (er : ExerciseResult) : IO Unit := do
   let score :=
@@ -42,6 +42,19 @@ def ExerciseResult.print (er : ExerciseResult) : IO Unit := do
   IO.println s!"{er.name}:"
   IO.println s!"  {er.status} ({score} points)"
   IO.println s!"  {er.output}"
+
+structure ExerciseResultDebug extends ExerciseResult where
+  sheet_name : Name         -- Name of the exercise in the sheet
+  expected_status : String  -- Expected status of the test, "passed" or "failed"
+  output_log : String       -- Additional information about the autograder's decision
+
+def ExerciseResultDebug.print (er : ExerciseResultDebug) : IO Unit := do
+  IO.print s!"{er.name}: "
+  if er.status == er.expected_status then
+    IO.println s!"\x1b[1m\u001b[32mPassed\u001b[0m"
+  else
+    IO.println s!"\x1b[1m\u001b[31mFailed\u001b[0m"
+    IO.println s!"  {er.output_log}"
 
 structure GradingResults where
   tests : Array ExerciseResult
@@ -112,7 +125,7 @@ def exitWithError {α} (errMsg : String) (instructorInfo: String := "")
   throw <| IO.userError (errMsg ++ "\n" ++ instructorInfo)
 
 def checkDefinition (name subName : Name) (pts : Float) (constInfo subConstInfo : ConstantInfo)
-  (sheet : Environment) : IO ExerciseResult := do
+  (sheet : Environment) : IO ExerciseResultDebug := do
     -- Get the list of tactics for the problem
     let tactics :=
       if let some t := validTacticsAttr.getParam? sheet name then t
@@ -122,80 +135,98 @@ def checkDefinition (name subName : Name) (pts : Float) (constInfo subConstInfo 
     -- * Ensure declaration type matches sheet
     if not (constInfo.type == subConstInfo.type) then
         pure { name := subName,
+               score := 0.0 
                status := "failed",
                output := "Type is different from expected: "
                           ++ s!"{constInfo.type} does not match "
                           ++ s!"{subConstInfo.type}",
-               score := 0.0 }
+               sheet_name := name,
+               expected_status := "none",
+               output_log := "Type is different from expected: "
+                          ++ s!"{constInfo.type} does not match "
+                          ++ s!"{subConstInfo.type}" }
     -- * Submitted declaration must match the soundness of the sheet decl
     else if (subConstInfo.isUnsafe && ! constInfo.isUnsafe) ||
             (subConstInfo.isPartial && ! constInfo.isPartial) then
       pure { name := subName,
-              status := "failed",
-              output := "Declaration is partial or unsafe",
-              score := 0.0 }
+             score := 0.0,
+             status := "failed",
+             output := "Declaration is partial or unsafe",
+             sheet_name := name,
+             expected_status := "none",
+             output_log := "Declaration is partial or unsafe" }
     else if (!subConstInfo.hasValue) then
       pure { name := subName,
-             status := "failed",
              score := 0.0,
-             output := "Declaration does not contain a value" }
+             status := "failed",
+             output := "Declaration does not contain a value",
+             sheet_name := name,
+             expected_status := "none",
+             output_log := "Declaration does not contain a value" }
     else if (subConstInfo.value!.equal constInfo.value!) then
       pure { name := subName,
-             status := "passed",
              score := pts,
-             output := "Marked as equal" 
-             -- output := "Passed all tests" 
-             }
+             status := "passed",
+             output := "Passed all tests",
+             sheet_name := name,
+             expected_status := "none",
+             output_log := "Expr values are marked as equal" }
     else if (subConstInfo.value!.eqv constInfo.value!) then
       pure { name := subName,
-             status := "passed",
              score := pts,
-             output := "Marked as equivalent" 
-             -- output := "Passed all tests" 
-             }
+             status := "passed",
+             output := "Passed all tests" 
+             sheet_name := name,
+             expected_status := "none",
+             output_log := "Expr values are marked as equivalent" }
     else
       let sheetExpr := constInfo.value!
       let subExpr := subConstInfo.value!
-
       -- Run tactics to prove equality
-      let checkEquality : MetaM ExerciseResult := do
+      let checkEquality : MetaM ExerciseResultDebug := do
         -- Create a goal to prove that the two expressions are equal
         let eqExpr ← mkEq sheetExpr subExpr
         let mvar ← mkFreshExprMVar (some eqExpr)
         let mvarId := mvar.mvarId!
-
-        -- Try refl and hrefl
+        -- Try refl
         try mvarId.refl;
             return { name := subName,
+                     score := pts,
                      status := "passed",
-                     output := "Proven equal by refl",
-                     -- output := "Passed all tests",
-                     score := pts }
+                     output := "Passed all tests",
+                     sheet_name := name,
+                     expected_status := "none",
+                     output_log := "Proven equal by refl" }
         catch _ => pure ()
-
+        -- Try hrefl
         try mvarId.hrefl;
             return { name := subName,
+                     score := pts,
                      status := "passed",
-                     output := "Proven equal by hrefl",
-                     -- output := "Passed all tests",
-                     score := pts }
+                     output := "Passed all tests",
+                     sheet_name := name,
+                     expected_status := "none",
+                     output_log := "Proven equal by hrefl" }
         catch _ => pure ()
-
         -- Run tactics to prove equality
         -- TODO: check if there is backtracking after the tactic is applied
         for (tacName, tac) in tactics do
           let (_, goals) ← runTacticMAsMetaM (try tac catch _ => pure ()) [mvarId]
           if goals.isEmpty then
             return { name := subName,
+                     score := pts,
                      status := "passed",
-                     -- output := "Passed all tests",
-                     output := s!"Proven equal by {tacName}",
-                     score := pts }
-
+                     output := "Passed all tests",
+                     sheet_name := name,
+                     expected_status := "none",
+                     output_log := s!"Proven equal by {tacName}" }
         return { name := subName,
-                 status := "failed",
                  score := 0.0,
-                 output := "Not found to be equal" }
+                 status := "failed",
+                 output := "Not found to be equal" 
+                 sheet_name := name,
+                 expected_status := "none",
+                 output_log := "Not found to be equal" }
 
       let ctx : Core.Context := { fileName := "", fileMap := default }
       let cstate : Core.State := { env := sheet }
@@ -204,7 +235,7 @@ def checkDefinition (name subName : Name) (pts : Float) (constInfo subConstInfo 
 
 def checkProof (name subName : Name) (pts : Float) 
   (constInfo subConstInfo : ConstantInfo)
-  (sheet submission : Environment) : IO ExerciseResult := do
+  (sheet submission : Environment) : IO ExerciseResultDebug := do
     -- Gather axioms in submitted declaration
     let (_, submissionState) :=
           ((CollectAxioms.collect name).run submission).run {}
@@ -213,55 +244,71 @@ def checkProof (name subName : Name) (pts : Float)
     -- * Ensure declaration doesn't use `sorry` (separate from other
     --   axioms since it's especially common)
     if subConstInfo.value?.any (·.hasSorry) then
-      pure { name,
+      pure { name := subName,
+             score := 0.0 
              status := "failed",
              output := "Proof contains sorry",
-             score := 0.0 }
+             sheet_name := name,
+             expected_status := "none",
+             output_log := "Proof contains sorry" }
     -- * Ensure declaration type matches sheet
     else if not (constInfo.type == subConstInfo.type) then
-        pure { name,
-               status := "failed",
-               output := "Type is different from expected: "
-                          ++ s!"{constInfo.type} does not match "
-                          ++ s!"{subConstInfo.type}",
-               score := 0.0 }
+      pure { name := subName,
+             score := 0.0 
+             status := "failed",
+             output := "Type is different from expected: "
+                       ++ s!"{constInfo.type} does not match "
+                       ++ s!"{subConstInfo.type}",
+             sheet_name := name,
+             expected_status := "none",
+             output_log := "Type is different from expected: "
+                        ++ s!"{constInfo.type} does not match "
+                        ++ s!"{subConstInfo.type}" }
     -- * Submitted declaration must use only legal axioms
     else if let some badAx :=
       findInvalidAxiom submissionState.axioms.toList sheet submission
     then
-      pure { name,
-              status := "failed",
-              output := s!"Uses unexpected axiom {badAx}",
-              score := 0.0 }
+      pure { name := subName,
+             score := 0.0,
+             status := "failed",
+             output := s!"Uses unexpected axiom {badAx}",
+             sheet_name := name,
+             expected_status := "none",
+             output_log := s!"Uses unexpected axiom {badAx}" }
     -- * Submitted declaration must match the soundness of the sheet decl
     else if (subConstInfo.isUnsafe && ! constInfo.isUnsafe) ||
             (subConstInfo.isPartial && ! constInfo.isPartial) then
-      pure { name,
-              status := "failed",
-              output := "Declaration is partial or unsafe",
-              score := 0.0 }
+      pure { name := subName,
+             score := 0.0 
+             status := "failed",
+             output := "Declaration is partial or unsafe",
+             sheet_name := name,
+             expected_status := "none",
+             output_log := "Declaration is partial or unsafe" }
     else
-      pure { name,
-              status := "passed",
-              score := pts,
-              output := "Passed all tests" }
+      pure { name := subName,
+             score := pts,
+             status := "passed",
+             output := "Passed all tests" 
+             sheet_name := name,
+             expected_status := "none"
+             output_log := "Passed all tests" }
 
 def gradeSubmission (sheet submission : Environment) : IO (Array ExerciseResult) := do
   let mut results := #[]
-
   for (name, constInfo) in sheet.constants.toList do
     -- Autograde proofs
     if let some pts := autogradedProofAttr.getParam? sheet name then
         if not name.isInternal then
           if let some subConstInfo := submission.find? name then
               let result ← checkProof name name pts constInfo subConstInfo sheet submission
-              results := results.push result
+              results := results.push result.toExerciseResult
             else
               let result :=
                 { name,
+                  score := 0.0 
                   status := "failed",
-                  output := "Declaration not found in submission",
-                  score := 0.0 }
+                  output := "Declaration not found in submission" }
               results := results.push result
 
     -- Autograde definitions
@@ -269,13 +316,13 @@ def gradeSubmission (sheet submission : Environment) : IO (Array ExerciseResult)
       if not name.isInternal then
         if let some subConstInfo := submission.find? name then
           let result ← checkDefinition name name pts constInfo subConstInfo sheet
-          results := results.push result
+          results := results.push result.toExerciseResult
         else
           let result :=
             { name,
+              score := 0.0 
               status := "failed",
-              output := "Declaration not found in submission",
-              score := 0.0 }
+              output := "Declaration not found in submission" }
           results := results.push result
 
   -- Gradescope will not accept an empty tests list, and this most likely
@@ -285,22 +332,23 @@ def gradeSubmission (sheet submission : Environment) : IO (Array ExerciseResult)
         ++ "because no exercises have been marked as graded by your "
         ++ "instructor. Please notify your instructor of this error and "
         ++ "provide them with a link to this submission."
-
   return results
 
-def testGradeSubmission (sheet submission : Environment) : IO (Array ExerciseResult) := do
+def testGradeSubmission (sheet submission : Environment) : IO (Array ExerciseResultDebug) := do
   let mut results := #[]
-
   for (name, constInfo) in sheet.constants.toList do
     -- Check autograding of proofs
     if let some pts := autogradedProofAttr.getParam? sheet name then
       if not name.isInternal then
         let mut currResults := #[]
+        -- TODO: Could be optimized by precomputing the list of tests for each exercise
+        -- and storing it in a map 
         -- Check every submission constant that is labeled as a test for the current sheet constant
         for (subName, subConstInfo) in submission.constants.toList do
           if let some (sheetName, expectedStatus) := autograderTestAttr.getParam? submission subName then
             if name == sheetName then
-              let result ← checkProof name subName pts constInfo subConstInfo sheet submission
+              let mut result ← checkProof name subName pts constInfo subConstInfo sheet submission
+              result := { result with expected_status := expectedStatus }
               currResults := currResults.push result
         results := results ++ currResults
 
@@ -312,7 +360,8 @@ def testGradeSubmission (sheet submission : Environment) : IO (Array ExerciseRes
         for (subName, subConstInfo) in submission.constants.toList do
           if let some (sheetName, expectedStatus) := autograderTestAttr.getParam? submission subName then
             if name == sheetName then
-              let result ← checkDefinition name subName pts constInfo subConstInfo sheet
+              let mut result ← checkDefinition name subName pts constInfo subConstInfo sheet
+              result := { result with expected_status := expectedStatus }
               currResults := currResults.push result
         results := results ++ currResults
 
@@ -331,7 +380,6 @@ def moveFilesIntoPlace (localSubmission : Option String) : IO (String × String)
   -- Copy the assignment's config file to the autograder directory
   -- IO.FS.writeFile (agPkgPathPrefix / "autograder_config.json")
   --     (← IO.FS.readFile "config.json")
-
 
   match localSubmission with
   | none =>
@@ -415,10 +463,6 @@ def parseArgs : List String → IO ConfigData :=
 
 unsafe def main (args : List String) : IO Unit := do
   let cfg ← parseArgs args
-  -- Check flags and set the grading function
-
-  let gradeFunction :=
-    if cfg.test then testGradeSubmission else gradeSubmission
 
   -- Get files into their appropriate locations
   let (studentFileName, output) ← moveFilesIntoPlace cfg.localSubmission
@@ -493,9 +537,33 @@ unsafe def main (args : List String) : IO Unit := do
   let os ← messages.toList.mapM (λ m => m.toString)
   IO.println <| os.foldl (·++·) ""
 
-  let tests ← gradeFunction sheet submissionEnv
-
-  let results : GradingResults := { tests, output }
-
-  if cfg.localRun then results.print 
-  else IO.FS.writeFile resultsJsonPath (toJson results).pretty
+  if cfg.test then 
+    let tests : Array ExerciseResultDebug ← testGradeSubmission sheet submissionEnv
+    let mut map := HashMap.empty 
+    if cfg.localRun then 
+      println "Results:"
+      -- Store exercise results in a map ⟨sheet_name, [results]⟩
+      for er in tests do
+        if let some ers := map.find? er.sheet_name then
+          map := map.insert er.sheet_name (ers ++ [er])
+        else
+          map := map.insert er.sheet_name [er]
+      -- Print results
+      -- TODO: sort by name
+      for (name, ers) in map.toList do
+        IO.println s!"{name}"
+        let mut correct := 0
+        let mut total := 0
+        for er in ers do
+          er.print
+          if er.status == er.expected_status then correct := correct + 1
+          total := total + 1
+        IO.println s!"Passed {correct}/{total} test cases!"
+        IO.println ""
+    else 
+      IO.FS.writeFile resultsJsonPath (toJson (tests.map fun exdbg => exdbg.toExerciseResult)).pretty
+  else 
+    let tests : Array ExerciseResult ← gradeSubmission sheet submissionEnv
+    let results : GradingResults := { tests, output }
+    if cfg.localRun then results.print 
+    else IO.FS.writeFile resultsJsonPath (toJson results).pretty
