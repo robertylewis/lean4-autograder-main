@@ -48,13 +48,23 @@ structure ExerciseResultDebug extends ExerciseResult where
   expected_status : String  -- Expected status of the test, "passed" or "failed"
   output_log : String       -- Additional information about the autograder's decision
 
+inductive Color : Type
+  | red
+  | green
+
+def addANSICode (c : Color) (s : String) : String := 
+  let code := match c with
+    | .red => "31"
+    | .green => "32"
+  s!"\x1b[1m\u001b[{code}m{s}\u001b[0m"
+
 def ExerciseResultDebug.print (er : ExerciseResultDebug) : IO Unit := do
   IO.print s!"{er.name}: "
   if er.status == er.expected_status then
-    IO.println s!"\x1b[1m\u001b[32mPassed\u001b[0m"
+    IO.println (addANSICode Color.green "Passed")
   else
-    IO.println s!"\x1b[1m\u001b[31mFailed\u001b[0m"
-    IO.println s!"  {er.output_log}"
+    IO.println (addANSICode Color.red "Failed")
+  IO.println s!"  {er.output_log}"
 
 structure GradingResults where
   tests : Array ExerciseResult
@@ -132,8 +142,71 @@ def checkDefinition (name subName : Name) (pts : Float) (constInfo subConstInfo 
       else if let some d := defaultTacticsAttr.getParam? sheet `setDefaultTactics then d
       else #[]
 
+    -- Helpers to check if two expressions are equal
+    let checkExpr (sheetExpr subExpr : Expr) : IO ExerciseResultDebug := do
+      -- Placeholder context and state
+      let ctx : Core.Context := { fileName := "", fileMap := default }
+      let cstate : Core.State := { env := sheet }
+
+      -- Create a goal to prove that the two expressions are equal
+      let helper : MetaM ExerciseResultDebug := do
+        let eqExpr ← mkEq sheetExpr subExpr
+        let mvar ← mkFreshExprMVar (some eqExpr)
+        let mvarId := mvar.mvarId!
+        -- Try refl
+        try mvarId.refl;
+            return { name := subName,
+                     score := pts,
+                     status := "passed",
+                     output := "Passed all tests",
+                     sheet_name := name,
+                     expected_status := "none",
+                     output_log := "Proven equal by refl\n"
+                            ++ s!"  Sheet: {constInfo.value!}\n"
+                            ++ s!"  Submission: {subConstInfo.value!}" }
+        catch _ => pure ()
+        -- Try hrefl
+        try mvarId.hrefl;
+            return { name := subName,
+                     score := pts,
+                     status := "passed",
+                     output := "Passed all tests",
+                     sheet_name := name,
+                     expected_status := "none",
+                     output_log := "Proven equal by hrefl\n" 
+                                    ++ s!"  Sheet: {constInfo.value!}\n"
+                                    ++ s!"  Submission: {subConstInfo.value!}" }
+        catch _ => pure ()
+        -- Run tactics to prove equality
+        -- TODO: check if there is backtracking after the tactic is applied
+        for (tacName, tac) in tactics do
+          let (_, goals) ← runTacticMAsMetaM (try tac catch _ => pure ()) [mvarId]
+          if goals.isEmpty then
+            return { name := subName,
+                     score := pts,
+                     status := "passed",
+                     output := "Passed all tests",
+                     sheet_name := name,
+                     expected_status := "none",
+                     output_log := s!"Proven equal by {tacName}\n"
+                                    ++ s!"  Sheet: {constInfo.value!}\n"
+                                    ++ s!"  Submission: {subConstInfo.value!}" }
+        return { name := subName,
+                 score := 0.0,
+                 status := "failed",
+                 output := "Not found to be equal" 
+                 sheet_name := name,
+                 expected_status := "none",
+                 output_log := "Not found to be equal\n"
+                                ++ s!"  Sheet: {constInfo.value!}\n"
+                                ++ s!"  Submission: {subConstInfo.value!}" }
+
+      let (proved?, _, _ ) ← MetaM.toIO helper ctx cstate
+      return proved?
+
     -- * Ensure declaration type matches sheet
-    if not (constInfo.type == subConstInfo.type) then
+    let checkType ← checkExpr constInfo.type subConstInfo.type
+    if not (checkType.status == "passed") then
         pure { name := subName,
                score := 0.0 
                status := "failed",
@@ -142,9 +215,9 @@ def checkDefinition (name subName : Name) (pts : Float) (constInfo subConstInfo 
                           ++ s!"{subConstInfo.type}",
                sheet_name := name,
                expected_status := "none",
-               output_log := "Type is different from expected: "
-                          ++ s!"{constInfo.type} does not match "
-                          ++ s!"{subConstInfo.type}" }
+               output_log := "Type is different from expected:\n"
+                          ++ s!"  Sheet: {constInfo.value!}\n"
+                          ++ s!"  Submission: {subConstInfo.value!}" }
     -- * Submitted declaration must match the soundness of the sheet decl
     else if (subConstInfo.isUnsafe && ! constInfo.isUnsafe) ||
             (subConstInfo.isPartial && ! constInfo.isPartial) then
@@ -178,60 +251,15 @@ def checkDefinition (name subName : Name) (pts : Float) (constInfo subConstInfo 
              output := "Passed all tests" 
              sheet_name := name,
              expected_status := "none",
-             output_log := "Expr values are marked as equivalent" }
+             output_log := "Expr values are marked as equivalent." 
+                            ++ s!"Sheet: {constInfo.value!}"
+                            ++ s!"Submission: {subConstInfo.value!}" }
     else
+      -- Run tactics to prove equality
       let sheetExpr := constInfo.value!
       let subExpr := subConstInfo.value!
-      -- Run tactics to prove equality
-      let checkEquality : MetaM ExerciseResultDebug := do
-        -- Create a goal to prove that the two expressions are equal
-        let eqExpr ← mkEq sheetExpr subExpr
-        let mvar ← mkFreshExprMVar (some eqExpr)
-        let mvarId := mvar.mvarId!
-        -- Try refl
-        try mvarId.refl;
-            return { name := subName,
-                     score := pts,
-                     status := "passed",
-                     output := "Passed all tests",
-                     sheet_name := name,
-                     expected_status := "none",
-                     output_log := "Proven equal by refl" }
-        catch _ => pure ()
-        -- Try hrefl
-        try mvarId.hrefl;
-            return { name := subName,
-                     score := pts,
-                     status := "passed",
-                     output := "Passed all tests",
-                     sheet_name := name,
-                     expected_status := "none",
-                     output_log := "Proven equal by hrefl" }
-        catch _ => pure ()
-        -- Run tactics to prove equality
-        -- TODO: check if there is backtracking after the tactic is applied
-        for (tacName, tac) in tactics do
-          let (_, goals) ← runTacticMAsMetaM (try tac catch _ => pure ()) [mvarId]
-          if goals.isEmpty then
-            return { name := subName,
-                     score := pts,
-                     status := "passed",
-                     output := "Passed all tests",
-                     sheet_name := name,
-                     expected_status := "none",
-                     output_log := s!"Proven equal by {tacName}" }
-        return { name := subName,
-                 score := 0.0,
-                 status := "failed",
-                 output := "Not found to be equal" 
-                 sheet_name := name,
-                 expected_status := "none",
-                 output_log := "Not found to be equal" }
-
-      let ctx : Core.Context := { fileName := "", fileMap := default }
-      let cstate : Core.State := { env := sheet }
-      let (proved?, _, _ ) ← MetaM.toIO checkEquality ctx cstate
-      return proved?
+      let result ← checkExpr sheetExpr subExpr
+      pure result
 
 def checkProof (name subName : Name) (pts : Float) 
   (constInfo subConstInfo : ConstantInfo)
