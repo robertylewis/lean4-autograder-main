@@ -65,7 +65,7 @@ def Lean.Environment.moduleOfDecl? (decl : Name) (env : Environment)
   let modIdx : Nat ← env.getModuleIdxFor? decl
   env.header.moduleNames[modIdx]?
 
-def validAxioms : Array Name :=
+def defaultValidAxioms : Array Name :=
   #["Classical.choice".toName,
     "Quot.sound".toName,
     "propext".toName,
@@ -77,7 +77,8 @@ def axiomHasCorrectType (ax : Name) (sheet submission : Environment) : Bool :=
     | _                                => false
 
 def findInvalidAxiom (submissionAxioms : List Name)
-                     (sheet submission : Environment) : Option Name := do
+                     (sheet submission : Environment)
+                     (validAxioms : Array Name) : Option Name := do
   for ax in submissionAxioms do
     let isBaseAxiom := validAxioms.contains ax
     let isTaggedAxiom := legalAxiomAttr.hasTag sheet ax
@@ -207,6 +208,11 @@ def checkProof (name : Name) (pts : Float) (constInfo subConstInfo : ConstantInf
     let (_, submissionState) :=
           ((CollectAxioms.collect name).run submission).run {}
 
+
+    let validAxioms :=
+      if let some t := validAxiomsAttr.getParam? sheet name then t
+      else defaultValidAxioms
+
     -- Tests:
     -- * Ensure declaration doesn't use `sorry` (separate from other
     --   axioms since it's especially common)
@@ -224,8 +230,9 @@ def checkProof (name : Name) (pts : Float) (constInfo subConstInfo : ConstantInf
                           ++ s!"{subConstInfo.type}",
                score := 0.0 }
     -- * Submitted declaration must use only legal axioms
+
     else if let some badAx :=
-      findInvalidAxiom submissionState.axioms.toList sheet submission
+      findInvalidAxiom submissionState.axioms.toList sheet submission validAxioms
     then
       pure { name,
               status := "failed",
