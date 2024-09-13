@@ -10,7 +10,7 @@ syntax scientific : ptVal
 syntax (name := autograded_proof) "autogradedProof" ptVal : attr
 syntax (name := autograded_def) "autogradedDef" ptVal : attr
 
-initialize autogradedProofAttr : ParametricAttribute Float ←  
+initialize autogradedProofAttr : ParametricAttribute Float ←
   registerParametricAttribute {
     name := `autograded_proof
     descr := "Specifies the point value of a problem"
@@ -36,15 +36,32 @@ initialize autogradedDefAttr : ParametricAttribute Float ←
     afterSet := λ _ _ => do pure ()
   }
 
+-- Customize valid axioms
+syntax:50 (name := valid_axioms) "validAxioms" "#[" sepBy(ident, ",") "]" : attr
+
+initialize validAxiomsAttr : ParametricAttribute (Array Name) ←
+  registerParametricAttribute {
+    name := `valid_axioms
+    descr := "Specifies the axioms allowed in a proof"
+    getParam := λ _ stx =>
+      match stx with
+        | `(attr| validAxioms #[$axs,*]) =>
+          return axs.getElems.map fun ax => (
+          ax.raw.prettyPrint.pretty.toName)
+        | _ => throwError "Invalid valid axiom attribute"
+    afterSet := λ _ _ => do pure ()
+  }
+
+
 -- Autograder tactics attributes
 syntax:50 (name := valid_tactics) "validTactics" "#[" sepBy(tactic, ",") "]" : attr
 syntax:50 (name := default_tactics) "defaultTactics" "#[" sepBy(tactic, ",") "]" : attr
 
-initialize validTacticsAttr : ParametricAttribute (Array (String × TacticM Unit)) ← 
+initialize validTacticsAttr : ParametricAttribute (Array (String × TacticM Unit)) ←
   registerParametricAttribute {
     name := `valid_tactics
     descr := "Specifies the tactics run to validate a solution"
-    getParam := λ _ stx => 
+    getParam := λ _ stx =>
       match stx with
         | `(attr| validTactics #[$tacs,*]) =>
           return tacs.getElems.map fun tac => (
@@ -54,12 +71,13 @@ initialize validTacticsAttr : ParametricAttribute (Array (String × TacticM Unit
     afterSet := λ _ _ => do pure ()
   }
 
+
 -- We expect this to be an attribute that is set up over the config definition
-initialize defaultTacticsAttr : ParametricAttribute (Array (String × TacticM Unit)) ← 
+initialize defaultTacticsAttr : ParametricAttribute (Array (String × TacticM Unit)) ←
   registerParametricAttribute {
     name := `default_tactics
     descr := "Specifies the default tactics run to validate a solution"
-    getParam := λ _ stx => 
+    getParam := λ _ stx =>
       match stx with
         | `(attr| defaultTactics #[$tacs,*]) =>
           return tacs.getElems.map fun tac => (
@@ -69,7 +87,7 @@ initialize defaultTacticsAttr : ParametricAttribute (Array (String × TacticM Un
     afterSet := λ _ _ => do pure ()
   }
 
--- Testing the autograder 
+-- Testing the autograder
 declare_syntax_cat exerciseType
 syntax "proof" : exerciseType
 syntax "def" : exerciseType
@@ -80,7 +98,7 @@ syntax "fails" : status
 
 syntax (name := autograder_test) "autograderTest" status name : attr
 
-initialize autograderTestAttr : ParametricAttribute (Name × String) ← 
+initialize autograderTestAttr : ParametricAttribute (Name × String) ←
   registerParametricAttribute {
     name := `autograder_test
     descr := "For testing purposes, specifies whether a submission is expected to pass or fail a test"
