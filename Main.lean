@@ -1,4 +1,4 @@
-import Lean 
+import Lean
 import AutograderLib
 -- Ensures Mathlib is compiled when the container is being uploaded:
 -- import Mathlib
@@ -12,6 +12,8 @@ def resultsJsonPath : FilePath := ".." / "results" / "results.json"
 -- These are arbitrary
 def solutionModuleName := "Solution"
 def submissionFileName := "Assignment.lean"
+
+def solutionSecretNamespace := "SolutionNamespace"
 
 -- These are generated based on the above
 def sheetModuleName := s!"{solutionDirName}.{solutionModuleName}".toName
@@ -52,7 +54,7 @@ inductive Color : Type
   | red
   | green
 
-def addANSICode (c : Color) (s : String) : String := 
+def addANSICode (c : Color) (s : String) : String :=
   let code := match c with
     | .red => "31"
     | .green => "32"
@@ -174,7 +176,7 @@ def checkDefinition (name subName : Name) (pts : Float) (constInfo subConstInfo 
                      output := "Passed all tests",
                      sheet_name := name,
                      expected_status := "none",
-                     output_log := "Proven equal by hrefl\n" 
+                     output_log := "Proven equal by hrefl\n"
                                     ++ s!"  Sheet: {constInfo.value!}\n"
                                     ++ s!"  Submission: {subConstInfo.value!}" }
         catch _ => pure ()
@@ -195,7 +197,7 @@ def checkDefinition (name subName : Name) (pts : Float) (constInfo subConstInfo 
         return { name := subName,
                  score := 0.0,
                  status := "failed",
-                 output := "Not found to be equal" 
+                 output := "Not found to be equal"
                  sheet_name := name,
                  expected_status := "none",
                  output_log := "Not found to be equal\n"
@@ -209,7 +211,7 @@ def checkDefinition (name subName : Name) (pts : Float) (constInfo subConstInfo 
     let checkType ← checkExpr constInfo.type subConstInfo.type
     if not (checkType.status == "passed") then
         pure { name := subName,
-               score := 0.0 
+               score := 0.0
                status := "failed",
                output := "Type is different from expected: "
                           ++ s!"{constInfo.type} does not match "
@@ -249,10 +251,10 @@ def checkDefinition (name subName : Name) (pts : Float) (constInfo subConstInfo 
       pure { name := subName,
              score := pts,
              status := "passed",
-             output := "Passed all tests" 
+             output := "Passed all tests"
              sheet_name := name,
              expected_status := "none",
-             output_log := "Expr values are marked as equivalent." 
+             output_log := "Expr values are marked as equivalent."
                             ++ s!"Sheet: {constInfo.value!}"
                             ++ s!"Submission: {subConstInfo.value!}" }
     else
@@ -262,7 +264,7 @@ def checkDefinition (name subName : Name) (pts : Float) (constInfo subConstInfo 
       let result ← checkExpr sheetExpr subExpr
       pure result
 
-def checkProof (name subName : Name) (pts : Float) 
+def checkProof (name subName : Name) (pts : Float)
   (constInfo subConstInfo : ConstantInfo)
   (sheet submission : Environment) : IO ExerciseResultDebug := do
     -- Gather axioms in submitted declaration
@@ -279,7 +281,7 @@ def checkProof (name subName : Name) (pts : Float)
     --   axioms since it's especially common)
     if subConstInfo.value?.any (·.hasSorry) then
       pure { name := subName,
-             score := 0.0 
+             score := 0.0
              status := "failed",
              output := "Proof contains sorry",
              sheet_name := name,
@@ -288,7 +290,7 @@ def checkProof (name subName : Name) (pts : Float)
     -- * Ensure declaration type matches sheet
     else if not (constInfo.type == subConstInfo.type) then
       pure { name := subName,
-             score := 0.0 
+             score := 0.0
              status := "failed",
              output := "Type is different from expected: "
                        ++ s!"{constInfo.type} does not match "
@@ -314,7 +316,7 @@ def checkProof (name subName : Name) (pts : Float)
     else if (subConstInfo.isUnsafe && ! constInfo.isUnsafe) ||
             (subConstInfo.isPartial && ! constInfo.isPartial) then
       pure { name := subName,
-             score := 0.0 
+             score := 0.0
              status := "failed",
              output := "Declaration is partial or unsafe",
              sheet_name := name,
@@ -324,10 +326,41 @@ def checkProof (name subName : Name) (pts : Float)
       pure { name := subName,
              score := pts,
              status := "passed",
-             output := "Passed all tests" 
+             output := "Passed all tests"
              sheet_name := name,
              expected_status := "none"
              output_log := "Passed all tests" }
+
+/--
+
+-/
+def setUpNamespaceAndImport (sheetFile submissionFile : FilePath) : IO Unit := do
+  -- modify submission to import solution
+  let submissionContents := s!"import {sheetModuleName}\n" ++ (← IO.FS.readFile submissionFile)
+  IO.FS.writeFile submissionFile submissionContents
+
+  -- enclose sheet contents in namespace
+  let importLineTest (s : String) : Bool :=
+    let s' := s.trim
+    s' == "\n" || s'.startsWith "import"
+  let (importLines, contentLines) :=
+    (← IO.FS.readFile sheetFile).splitOn "\n"
+      |>.span importLineTest
+  let lines := importLines ++ [s!"namespace {solutionSecretNamespace}"]
+    ++ contentLines ++ [s!"end {solutionSecretNamespace}"] |> String.intercalate "\n"
+  IO.FS.writeFile sheetFile lines
+
+/-- Build a name from components. For example ``from_components [`foo, `bar]`` becomes
+  ``` `foo.bar```.
+  It is the inverse of `Name.components` on list of names that have single components.
+
+  Copied from mathlib
+  -/
+private def fromComponents : List Name → Name := go .anonymous where
+  /-- Auxiliary for `Name.fromComponents` -/
+  go : Name → List Name → Name
+  | n, []        => n
+  | n, s :: rest => go (s.updatePrefix n) rest
 
 def gradeSubmission (sheet submission : Environment) : IO (Array ExerciseResult) := do
   let mut results := #[]
@@ -335,13 +368,14 @@ def gradeSubmission (sheet submission : Environment) : IO (Array ExerciseResult)
     -- Autograde proofs
     if let some pts := autogradedProofAttr.getParam? sheet name then
         if not name.isInternal then
-          if let some subConstInfo := submission.find? name then
+          let trueName := name.components.erase solutionSecretNamespace.toName |> fromComponents
+          if let some subConstInfo := submission.find? trueName then
               let result ← checkProof name name pts constInfo subConstInfo sheet submission
               results := results.push result.toExerciseResult
             else
               let result :=
                 { name,
-                  score := 0.0 
+                  score := 0.0
                   status := "failed",
                   output := "Declaration not found in submission" }
               results := results.push result
@@ -350,12 +384,13 @@ def gradeSubmission (sheet submission : Environment) : IO (Array ExerciseResult)
     else if let some pts := autogradedDefAttr.getParam? sheet name then
       if not name.isInternal then
         if let some subConstInfo := submission.find? name then
-          let result ← checkDefinition name name pts constInfo subConstInfo sheet
+          let trueName := name.components.erase solutionSecretNamespace.toName |> fromComponents
+          let result ← checkDefinition name trueName pts constInfo subConstInfo sheet
           results := results.push result.toExerciseResult
         else
           let result :=
             { name,
-              score := 0.0 
+              score := 0.0
               status := "failed",
               output := "Declaration not found in submission" }
           results := results.push result
@@ -377,7 +412,7 @@ def testGradeSubmission (sheet submission : Environment) : IO (Array ExerciseRes
       if not name.isInternal then
         let mut currResults := #[]
         -- TODO: Could be optimized by precomputing the list of tests for each exercise
-        -- and storing it in a map 
+        -- and storing it in a map
         -- Check every submission constant that is labeled as a test for the current sheet constant
         for (subName, subConstInfo) in submission.constants.toList do
           if let some (sheetName, expectedStatus) := autograderTestAttr.getParam? submission subName then
@@ -508,7 +543,9 @@ unsafe def main (args : List String) : IO Unit := do
 
   if !cfg.localRun then compileAutograder
 
-  -- -- Import the template (as a module, since it is known to compile)
+  setUpNamespaceAndImport sheetFile studentFileName
+
+  -- Import the template (as a module, since it is known to compile)
   -- let sheetName := s!"{solutionDirName}.{solutionModuleName}".toName
   -- searchPathRef.set (← addSearchPathFromEnv {})
   -- let sheet ← importModules [{module := sheetName}] {}
@@ -572,10 +609,10 @@ unsafe def main (args : List String) : IO Unit := do
   let os ← messages.toList.mapM (λ m => m.toString)
   IO.println <| os.foldl (·++·) ""
 
-  if cfg.test then 
+  if cfg.test then
     let tests : Array ExerciseResultDebug ← testGradeSubmission sheet submissionEnv
-    let mut map := HashMap.empty 
-    if cfg.localRun then 
+    let mut map := HashMap.empty
+    if cfg.localRun then
       println "Results:"
       -- Store exercise results in a map ⟨sheet_name, [results]⟩
       for er in tests do
@@ -595,10 +632,10 @@ unsafe def main (args : List String) : IO Unit := do
           total := total + 1
         IO.println s!"Passed {correct}/{total} test cases!"
         IO.println ""
-    else 
+    else
       IO.FS.writeFile resultsJsonPath (toJson (tests.map fun exdbg => exdbg.toExerciseResult)).pretty
-  else 
+  else
     let tests : Array ExerciseResult ← gradeSubmission sheet submissionEnv
     let results : GradingResults := { tests, output }
-    if cfg.localRun then results.print 
+    if cfg.localRun then results.print
     else IO.FS.writeFile resultsJsonPath (toJson results).pretty
