@@ -1,4 +1,4 @@
-import Lean 
+import Lean
 import AutograderLib
 -- Ensures Mathlib is compiled when the container is being uploaded:
 -- import Mathlib
@@ -52,7 +52,7 @@ inductive Color : Type
   | red
   | green
 
-def addANSICode (c : Color) (s : String) : String := 
+def addANSICode (c : Color) (s : String) : String :=
   let code := match c with
     | .red => "31"
     | .green => "32"
@@ -174,7 +174,7 @@ def checkDefinition (name subName : Name) (pts : Float) (constInfo subConstInfo 
                      output := "Passed all tests",
                      sheet_name := name,
                      expected_status := "none",
-                     output_log := "Proven equal by hrefl\n" 
+                     output_log := "Proven equal by hrefl\n"
                                     ++ s!"  Sheet: {constInfo.value!}\n"
                                     ++ s!"  Submission: {subConstInfo.value!}" }
         catch _ => pure ()
@@ -195,7 +195,7 @@ def checkDefinition (name subName : Name) (pts : Float) (constInfo subConstInfo 
         return { name := subName,
                  score := 0.0,
                  status := "failed",
-                 output := "Not found to be equal" 
+                 output := "Not found to be equal"
                  sheet_name := name,
                  expected_status := "none",
                  output_log := "Not found to be equal\n"
@@ -209,7 +209,7 @@ def checkDefinition (name subName : Name) (pts : Float) (constInfo subConstInfo 
     let checkType ← checkExpr constInfo.type subConstInfo.type
     if not (checkType.status == "passed") then
         pure { name := subName,
-               score := 0.0 
+               score := 0.0
                status := "failed",
                output := "Type is different from expected: "
                           ++ s!"{constInfo.type} does not match "
@@ -249,10 +249,10 @@ def checkDefinition (name subName : Name) (pts : Float) (constInfo subConstInfo 
       pure { name := subName,
              score := pts,
              status := "passed",
-             output := "Passed all tests" 
+             output := "Passed all tests"
              sheet_name := name,
              expected_status := "none",
-             output_log := "Expr values are marked as equivalent." 
+             output_log := "Expr values are marked as equivalent."
                             ++ s!"Sheet: {constInfo.value!}"
                             ++ s!"Submission: {subConstInfo.value!}" }
     else
@@ -262,7 +262,7 @@ def checkDefinition (name subName : Name) (pts : Float) (constInfo subConstInfo 
       let result ← checkExpr sheetExpr subExpr
       pure result
 
-def checkProof (name subName : Name) (pts : Float) 
+def checkProof (name subName : Name) (pts : Float)
   (constInfo subConstInfo : ConstantInfo)
   (sheet submission : Environment) : IO ExerciseResultDebug := do
     -- Gather axioms in submitted declaration
@@ -279,7 +279,7 @@ def checkProof (name subName : Name) (pts : Float)
     --   axioms since it's especially common)
     if subConstInfo.value?.any (·.hasSorry) then
       pure { name := subName,
-             score := 0.0 
+             score := 0.0
              status := "failed",
              output := "Proof contains sorry",
              sheet_name := name,
@@ -288,7 +288,7 @@ def checkProof (name subName : Name) (pts : Float)
     -- * Ensure declaration type matches sheet
     else if not (constInfo.type == subConstInfo.type) then
       pure { name := subName,
-             score := 0.0 
+             score := 0.0
              status := "failed",
              output := "Type is different from expected: "
                        ++ s!"{constInfo.type} does not match "
@@ -314,7 +314,7 @@ def checkProof (name subName : Name) (pts : Float)
     else if (subConstInfo.isUnsafe && ! constInfo.isUnsafe) ||
             (subConstInfo.isPartial && ! constInfo.isPartial) then
       pure { name := subName,
-             score := 0.0 
+             score := 0.0
              status := "failed",
              output := "Declaration is partial or unsafe",
              sheet_name := name,
@@ -324,7 +324,7 @@ def checkProof (name subName : Name) (pts : Float)
       pure { name := subName,
              score := pts,
              status := "passed",
-             output := "Passed all tests" 
+             output := "Passed all tests"
              sheet_name := name,
              expected_status := "none"
              output_log := "Passed all tests" }
@@ -341,7 +341,7 @@ def gradeSubmission (sheet submission : Environment) : IO (Array ExerciseResult)
             else
               let result :=
                 { name,
-                  score := 0.0 
+                  score := 0.0
                   status := "failed",
                   output := "Declaration not found in submission" }
               results := results.push result
@@ -355,7 +355,7 @@ def gradeSubmission (sheet submission : Environment) : IO (Array ExerciseResult)
         else
           let result :=
             { name,
-              score := 0.0 
+              score := 0.0
               status := "failed",
               output := "Declaration not found in submission" }
           results := results.push result
@@ -377,7 +377,7 @@ def testGradeSubmission (sheet submission : Environment) : IO (Array ExerciseRes
       if not name.isInternal then
         let mut currResults := #[]
         -- TODO: Could be optimized by precomputing the list of tests for each exercise
-        -- and storing it in a map 
+        -- and storing it in a map
         -- Check every submission constant that is labeled as a test for the current sheet constant
         for (subName, subConstInfo) in submission.constants.toList do
           if let some (sheetName, expectedStatus) := autograderTestAttr.getParam? submission subName then
@@ -572,14 +572,14 @@ unsafe def main (args : List String) : IO Unit := do
   let os ← messages.toList.mapM (λ m => m.toString)
   IO.println <| os.foldl (·++·) ""
 
-  if cfg.test then 
+  if cfg.test then
     let tests : Array ExerciseResultDebug ← testGradeSubmission sheet submissionEnv
-    let mut map := HashMap.empty 
-    if cfg.localRun then 
+    let mut map := Std.HashMap.empty
+    if cfg.localRun then
       println "Results:"
       -- Store exercise results in a map ⟨sheet_name, [results]⟩
       for er in tests do
-        if let some ers := map.find? er.sheet_name then
+        if let some ers := map[er.sheet_name]? then
           map := map.insert er.sheet_name (ers ++ [er])
         else
           map := map.insert er.sheet_name [er]
@@ -595,10 +595,10 @@ unsafe def main (args : List String) : IO Unit := do
           total := total + 1
         IO.println s!"Passed {correct}/{total} test cases!"
         IO.println ""
-    else 
+    else
       IO.FS.writeFile resultsJsonPath (toJson (tests.map fun exdbg => exdbg.toExerciseResult)).pretty
-  else 
+  else
     let tests : Array ExerciseResult ← gradeSubmission sheet submissionEnv
     let results : GradingResults := { tests, output }
-    if cfg.localRun then results.print 
+    if cfg.localRun then results.print
     else IO.FS.writeFile resultsJsonPath (toJson results).pretty
