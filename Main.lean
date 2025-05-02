@@ -159,65 +159,65 @@ def gradeSubmission (sheet submission : Environment)
 -- Returns a tuple of (fileName, outputMessage)
 def moveFilesIntoPlace : IO (String × String) := do
   -- Copy the assignment's config file to the autograder directory
-  IO.FS.writeFile (agPkgPathPrefix / "autograder_config.json")
-      (← IO.FS.readFile "config.json")
+  -- IO.FS.writeFile (agPkgPathPrefix / "autograder_config.json")
+  --     (← IO.FS.readFile "config.json")
 
   -- Copy the student's submission to the autograder directory. They should only
   -- have uploaded one Lean file; if they submitted more, we pick the first
-  let submittedFiles ← submissionUploadDir.readDir
-  let leanFiles := submittedFiles.filter
-    (λ f => f.path.extension == some "lean")
-  let some leanFile := leanFiles.get? (i := 0)
-    | exitWithError <| "Your submission was not graded because it did not "
-        ++ "contain a Lean file. Make sure to upload a single .lean file "
-        ++ "containing your solutions."
+  -- let submittedFiles ← submissionUploadDir.readDir
+  -- let leanFiles := submittedFiles.filter
+  --   (λ f => f.path.extension == some "lean")
+  let leanFile : FS.DirEntry := {root := "./autograder", fileName := "Assignment.lean"} --leanFiles.get? (i := 0)
+    -- | exitWithError <| "Your submission was not graded because it did not "
+    --     ++ "contain a Lean file. Make sure to upload a single .lean file "
+    --     ++ "containing your solutions."
   IO.FS.writeFile submissionFileName (← IO.FS.readFile leanFile.path)
-  let output :=
-    if leanFiles.size > 1
-    then "Warning: You submitted multiple Lean files. The autograder expects "
-      ++ "you to submit a single Lean file containing your solutions, and it "
-      ++ s!"will only grade a single file. It has picked {leanFile.fileName} "
-      ++ "to grade; this may not be the file you intended to be graded.\n\n"
-    else ""
+  let output := ""
+    -- if leanFiles.size > 1
+    -- then "Warning: You submitted multiple Lean files. The autograder expects "
+    --   ++ "you to submit a single Lean file containing your solutions, and it "
+    --   ++ s!"will only grade a single file. It has picked {leanFile.fileName} "
+    --   ++ "to grade; this may not be the file you intended to be graded.\n\n"
+    -- else ""
   pure (leanFile.fileName, output)
 
 def getTemplateFromGitHub : IO Unit := do
-  -- Read JSON config
-  let configRaw ← IO.FS.readFile (agPkgPathPrefix / "autograder_config.json")
-  let studentErrorText :=
-    "The autograder failed to run because it is incorrectly configured. Please "
-      ++ "notify your instructor of this error and provide them with a link to "
-      ++ "your submission."
-  let config ←
-    try
-      IO.ofExcept <| Json.parse configRaw
-    catch _ =>
-      exitWithError studentErrorText "Invalid JSON in autograder.json"
-  if ← sheetFile.pathExists then FS.removeFile sheetFile
-  let repoURLPath ← IO.ofExcept <| config.getObjValAs? String "public_repo"
-  let some repoName := (repoURLPath.splitOn "/").getLast?
-    | exitWithError studentErrorText "Invalid public_repo in autograder.json"
+--   -- Read JSON config
+--   let configRaw ← IO.FS.readFile (agPkgPathPrefix / "autograder_config.json")
+--   let studentErrorText :=
+--     "The autograder failed to run because it is incorrectly configured. Please "
+--       ++ "notify your instructor of this error and provide them with a link to "
+--       ++ "your submission."
+--   let config ←
+--     try
+--       IO.ofExcept <| Json.parse configRaw
+--     catch _ =>
+--       exitWithError studentErrorText "Invalid JSON in autograder.json"
+--   if ← sheetFile.pathExists then FS.removeFile sheetFile
+--   let repoURLPath ← IO.ofExcept <| config.getObjValAs? String "public_repo"
+--   let some repoName := (repoURLPath.splitOn "/").getLast?
+--     | exitWithError studentErrorText "Invalid public_repo in autograder.json"
 
-  -- Download the repo
-  let repoLocalPath : FilePath := agPkgPathPrefix / repoName
-  let out ← IO.Process.output {
-    cmd := "git"
-    args := #["clone", s!"https://github.com/{repoURLPath}",
-              repoLocalPath.toString]
-  }
-  if out.exitCode != 0 then
-    exitWithError <|
-      "The autograder failed to run due to an issue retrieving the assignment. "
-        ++ "Try resubmitting in a few minutes. If the problem persists, "
-        ++ "contact your instructor and provide them with a link to this "
-        ++ "submission."
+--   -- Download the repo
+--   let repoLocalPath : FilePath := agPkgPathPrefix / repoName
+--   let out ← IO.Process.output {
+--     cmd := "git"
+--     args := #["clone", s!"https://github.com/{repoURLPath}",
+--               repoLocalPath.toString]
+--   }
+--   if out.exitCode != 0 then
+--     exitWithError <|
+--       "The autograder failed to run due to an issue retrieving the assignment. "
+--         ++ "Try resubmitting in a few minutes. If the problem persists, "
+--         ++ "contact your instructor and provide them with a link to this "
+--         ++ "submission."
 
-  -- Move the assignment to the correct location; delete the cloned repo
-  let assignmentPath ← IO.ofExcept <|
-    config.getObjValAs? String "assignment_path"
-  let curAsgnFilePath : FilePath := agPkgPathPrefix / repoName / assignmentPath
+--   -- Move the assignment to the correct location; delete the cloned repo
+--   let assignmentPath ← IO.ofExcept <|
+--     config.getObjValAs? String "assignment_path"
+  let curAsgnFilePath : FilePath := "." / "autograder" / "Solution.lean" --agPkgPathPrefix / repoName / assignmentPath
   IO.FS.rename curAsgnFilePath sheetFile
-  IO.FS.removeDirAll repoLocalPath
+  -- IO.FS.removeDirAll repoLocalPath
 
 def compileAutograder : IO Unit := do
   -- Compile the autograder so we get all our deps, even if the sheet itself
