@@ -8,7 +8,7 @@ open Lean IO System Elab Command
 def agPkgPathPrefix : FilePath := ".lake" / "packages" / "autograder"
 def solutionDirName := "AutograderTests"
 def submissionUploadDir : FilePath := "/autograder/submission"
-def resultsJsonPath : FilePath := ".." / "results" / "results.json"
+def resultsJsonPath : FilePath := "results.json"
 -- These are arbitrary
 def solutionModuleName := "Solution"
 def submissionFileName := "Assignment.lean"
@@ -317,3 +317,4 @@ unsafe def main : IO Unit := do
   let tests ← gradeSubmission sheet submissionEnv
   let results : GradingResults := { tests, output }
   IO.FS.writeFile resultsJsonPath (toJson results).pretty
+  println <| toJson results
