@@ -216,7 +216,9 @@ def getTemplateFromGitHub : IO Unit := do
 --   let assignmentPath ← IO.ofExcept <|
 --     config.getObjValAs? String "assignment_path"
   let curAsgnFilePath : FilePath := "." / "autograder" / "Solution.lean" --agPkgPathPrefix / repoName / assignmentPath
-  IO.FS.rename curAsgnFilePath sheetFile
+
+  IO.FS.writeFile sheetFile (← IO.FS.readFile curAsgnFilePath)
+  -- IO.FS.rename curAsgnFilePath sheetFile
   -- IO.FS.removeDirAll repoLocalPath
 
 def compileAutograder : IO Unit := do
