@@ -423,7 +423,7 @@ def moveFilesIntoPlace (localSubmission : Option String) : IO (String × String)
     let submittedFiles ← submissionUploadDir.readDir
     let leanFiles := submittedFiles.filter
       (λ f => f.path.extension == some "lean")
-    let some leanFile := leanFiles.get? (i := 0)
+    let some leanFile := leanFiles[0]?
       | exitWithError <| "Your submission was not graded because it did not "
           ++ "contain a Lean file. Make sure to upload a single .lean file "
           ++ "containing your solutions."
@@ -574,7 +574,7 @@ unsafe def main (args : List String) : IO Unit := do
 
   if cfg.test then
     let tests : Array ExerciseResultDebug ← testGradeSubmission sheet submissionEnv
-    let mut map := Std.HashMap.empty
+    let mut map : Std.HashMap _ _ := ∅
     if cfg.localRun then
       println "Results:"
       -- Store exercise results in a map ⟨sheet_name, [results]⟩
