@@ -181,7 +181,7 @@ def checkDefinition (name subName : Name) (pts : Float) (constInfo subConstInfo 
         -- Run tactics to prove equality
         -- TODO: check if there is backtracking after the tactic is applied
         for (tacName, tac) in tactics do
-          let (_, goals) ← runTacticMAsMetaM (try tac catch _ => pure ()) [mvarId]
+          let (_, goals) ← runTacticMAsMetaM (try evalTactic tac catch _ => pure ()) [mvarId]
           if goals.isEmpty then
             return { name := subName,
                      score := pts,
