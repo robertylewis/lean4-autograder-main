@@ -129,6 +129,7 @@ def escapeHtml (s : String) :=
 
 -- Throw error and show it to the student, optionally providing additional
 -- information for the instructor only
+-- TODO this fails with --local if ../results doesn't exist
 def exitWithError {α} (errMsg : String) (instructorInfo: String := "")
   : IO α := do
   let result : FailureResult := {output := errMsg}
@@ -266,18 +267,15 @@ def checkProof (name subName : Name) (pts : Float)
   (constInfo subConstInfo : ConstantInfo)
   (sheet submission : Environment) : IO ExerciseResultDebug := do
     -- Gather axioms in submitted declaration
-    let (_, submissionState) :=
-          ((CollectAxioms.collect name).run submission).run {}
-
+    let axioms ← Core.CoreM.toIO' (collectAxioms name) { fileName := "", fileMap := default } { env := submission }
 
     let validAxioms :=
       if let some t := validAxiomsAttr.getParam? sheet name then t
       else defaultValidAxioms
 
     -- Tests:
-    -- * Ensure declaration doesn't use `sorry` (separate from other
-    --   axioms since it's especially common)
-    if subConstInfo.value?.any (·.hasSorry) then
+    -- * Ensure declaration's value doesn't contain a `sorry` directly (separate from other axioms since it's especially common)
+    if (subConstInfo.value? (allowOpaque := true)).any (·.hasSorry) then
       pure { name := subName,
              score := 0.0
              status := "failed",
@@ -299,9 +297,8 @@ def checkProof (name subName : Name) (pts : Float)
                         ++ s!"{constInfo.type} does not match "
                         ++ s!"{subConstInfo.type}" }
     -- * Submitted declaration must use only legal axioms
-
     else if let some badAx :=
-      findInvalidAxiom submissionState.axioms.toList sheet submission validAxioms
+      findInvalidAxiom axioms.toList sheet submission validAxioms
     then
       pure { name := subName,
              score := 0.0,
@@ -542,6 +539,18 @@ unsafe def main (args : List String) : IO Unit := do
   let inputCtx := Parser.mkInputContext submissionContents studentFileName
   let (header, parserState, messages) ← Parser.parseHeader inputCtx
 
+  /-
+  Enable initializers again. This fixes the following mysterious error (that is emitted to messages)
+  ```
+  error: `enableInitializerExecution` must be run before calling `importModules (loadExts := true)`
+  ```
+
+  The error seems to be caused by the fact that `processHeader` disables initializers which can be seen by adding the following line before and after it
+  ```
+  IO.println (← isInitializerExecutionEnabled)
+  ```
+  -/
+  enableInitializersExecution
   let (headerEnv, messages) ← processHeader header {} messages inputCtx
 
   if messages.hasErrors then

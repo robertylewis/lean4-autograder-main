@@ -65,7 +65,7 @@ initialize validTacticsAttr : ParametricAttribute (Array (String × Syntax)) ←
       match stx with
         | `(attr| validTactics #[$tacs,*]) =>
           return tacs.getElems.map fun tac => (
-            tac.prettyPrint.pretty.trim,
+            tac.prettyPrint.pretty.trimAscii.copy,
             tac)
         | _ => throwError "Invalid valid tactic attribute"
     afterSet := λ _ _ => do pure ()
@@ -81,7 +81,7 @@ initialize defaultTacticsAttr : ParametricAttribute (Array (String × Syntax)) �
       match stx with
         | `(attr| defaultTactics #[$tacs,*]) =>
           return tacs.getElems.map fun tac => (
-            tac.prettyPrint.pretty.trim,
+            tac.prettyPrint.pretty.trimAscii.copy,
             tac)
         | _ => throwError "Invalid default tactic attribute"
     afterSet := λ _ _ => do pure ()
